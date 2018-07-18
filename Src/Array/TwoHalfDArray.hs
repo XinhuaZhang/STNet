@@ -9,58 +9,47 @@ import           Data.Vector.Unboxed as VU
 -- 2.5D array: features x rows x cols, where column index changes fastest.
 -- 2D operations on this array are replicated to the feature dimension.
 
-newtype TwoHalfDArray a =
-  TwoHalfDArray (Array U DIM3 a)
-
 {-# INLINE get25DArrayFeatures #-}
 
 get25DArrayFeatures
-  :: (Unbox a)
-  => TwoHalfDArray a -> Int
-get25DArrayFeatures (TwoHalfDArray arr) =
+  :: (Source s e)
+  => Array s DIM3 e -> Int
+get25DArrayFeatures arr =
   let (Z :. nf :. _ :. _) = extent arr
   in nf
 
 {-# INLINE get25DArrayRows #-}
 
 get25DArrayRows
-  :: (Unbox a)
-  => TwoHalfDArray a -> Int
-get25DArrayRows (TwoHalfDArray arr) =
+  :: (Source s e)
+  => Array s DIM3 e -> Int
+get25DArrayRows arr =
   let (Z :. _ :. rows :. _) = extent arr
   in rows
 
 {-# INLINE get25DArrayCols #-}
 
 get25DArrayCols
-  :: (Unbox a)
-  => TwoHalfDArray a -> Int
-get25DArrayCols (TwoHalfDArray arr) =
+  :: (Source s e)
+  => Array s DIM3 e -> Int
+get25DArrayCols arr =
   let (Z :. _ :. _ :. cols) = extent arr
   in cols
 
 {-# INLINE get25DArrayShape #-}
 
 get25DArrayShape
-  :: (Unbox a)
-  => TwoHalfDArray a -> DIM3
-get25DArrayShape (TwoHalfDArray arr) =
-   extent arr
-
-
-{-# INLINE get25DArray #-}
-
-get25DArray :: TwoHalfDArray a -> Array U DIM3 a
-get25DArray (TwoHalfDArray arr) = arr
+  :: (Source s e)
+  => Array s DIM3 e -> DIM3
+get25DArrayShape arr = extent arr
 
 {-# INLINE get25DArrayFeatureVector #-}
 
 get25DArrayFeatureVector
-  :: (Unbox a)
-  => TwoHalfDArray a -> [VU.Vector a]
+  :: (Source s e, Unbox e)
+  => Array s DIM3 e -> [VU.Vector e]
 get25DArrayFeatureVector arr =
-  [ toUnboxed . computeUnboxedS . R.slice (get25DArray arr) $
-  (Z :. All :. i :. j)
+  [ toUnboxed . computeS . R.slice arr $ (Z :. All :. i :. j)
   | i <- [0 .. get25DArrayRows arr - 1]
   , j <- [0 .. get25DArrayCols arr - 1]
   ]
@@ -68,11 +57,10 @@ get25DArrayFeatureVector arr =
 {-# INLINE get25DArrayFeatureList #-}
 
 get25DArrayFeatureList
-  :: (Unbox a)
-  => TwoHalfDArray a -> [[a]]
+  :: (Source s e)
+  => Array s DIM3 e -> [[e]]
 get25DArrayFeatureList arr =
-  [ R.toList . computeUnboxedS . R.slice (get25DArray arr) $
-  (Z :. All :. i :. j)
+  [ R.toList . R.slice arr $ (Z :. All :. i :. j)
   | i <- [0 .. get25DArrayRows arr - 1]
   , j <- [0 .. get25DArrayCols arr - 1]
   ]
@@ -80,102 +68,71 @@ get25DArrayFeatureList arr =
 {-# INLINE get25DArray2DVector #-}
 
 get25DArray2DVector
-  :: (Unbox a)
-  => TwoHalfDArray a -> [VU.Vector a]
+  :: (Source s e, Unbox e)
+  => Array s DIM3 e -> [VU.Vector e]
 get25DArray2DVector arr =
   L.map
-    (\k ->
-       toUnboxed . computeS . R.slice (get25DArray arr) $ (Z :. k :. All :. All))
+    (\k -> toUnboxed . computeS . R.slice arr $ (Z :. k :. All :. All))
     [0 .. (get25DArrayFeatures arr) - 1]
     
 
 {-# INLINE get25DArray2DList #-}
 
 get25DArray2DList
-  :: (Unbox a)
-  => TwoHalfDArray a -> [[a]]
+  :: (Source s e)
+  => Array s DIM3 e -> [[e]]
 get25DArray2DList arr =
   L.map
-    (\k -> R.toList . R.slice (get25DArray arr) $ (Z :. k :. All :. All))
+    (\k -> R.toList . R.slice arr $ (Z :. k :. All :. All))
     [0 .. (get25DArrayFeatures arr) - 1]
-    
-
--- element-wise operations
-   
-{-# INLINE map25DArray #-}
-
-map25DArray
-  :: (Unbox a, Unbox b)
-  => (a -> b) -> TwoHalfDArray a -> TwoHalfDArray b
-map25DArray f (TwoHalfDArray arr) = TwoHalfDArray . computeS . R.map f $ arr
-
-{-# INLINE zipWith25DArray #-}
-
-zipWith25DArray
-  :: (Unbox a, Unbox b, Unbox c)
-  => (a -> b -> c) -> TwoHalfDArray a -> TwoHalfDArray b -> TwoHalfDArray c
-zipWith25DArray f (TwoHalfDArray arr1) (TwoHalfDArray arr2) =
-  TwoHalfDArray . computeS $ R.zipWith f arr1 arr2
-
 
 -- Replicating a 2D operation on the feature dimension.
 
 {-# INLINE mapArray #-}
 
 mapArray
-  :: (Unbox a)
-  => (Array D DIM2 a -> Array U DIM2 a) -> TwoHalfDArray a -> TwoHalfDArray a
+  :: (Source s e, Unbox e)
+  => (Array D DIM2 e -> Array U DIM2 e) -> Array s DIM3 e -> Array U DIM3 e
 mapArray f arr =
-  TwoHalfDArray .
   fromUnboxed (get25DArrayShape arr) .
-  VU.concat .
-  L.map
-    (\i -> toUnboxed . f . R.slice (get25DArray arr) $ (Z :. i :. All :. All)) $
+  VU.concat . L.map (\i -> toUnboxed . f . R.slice arr $ (Z :. i :. All :. All)) $
   [0 .. get25DArrayFeatures arr - 1]
 
 
 {-# INLINE mapArrayM #-}
 
 mapArrayM
-  :: (Unbox a, Monad m)
-  => (Array D DIM2 a -> m (Array U DIM2 a))
-  -> TwoHalfDArray a
-  -> m (TwoHalfDArray a)
+  :: (Source s e, Unbox e, Monad m)
+  => (Array D DIM2 e -> m (Array U DIM2 e))
+  -> Array s DIM3 e
+  -> m (Array U DIM3 e)
 mapArrayM f arr = do
   xs <-
-    M.mapM
-      (\i ->
-         fmap toUnboxed . f . R.slice (get25DArray arr) $ (Z :. i :. All :. All)) $
+    M.mapM (\i -> fmap toUnboxed . f . R.slice arr $ (Z :. i :. All :. All)) $
     [0 .. get25DArrayFeatures arr - 1]
-  return . TwoHalfDArray . fromUnboxed (get25DArrayShape arr) . VU.concat $ xs
+  return . fromUnboxed (get25DArrayShape arr) . VU.concat $ xs
 
 
 {-# INLINE mapVector #-}
 
 mapVector
-  :: (Unbox a)
-  => (VU.Vector a -> VU.Vector a) -> TwoHalfDArray a -> TwoHalfDArray a
+  :: (Source s e, Unbox e)
+  => (VU.Vector e -> VU.Vector e) -> Array s DIM3 e -> Array U DIM3 e
 mapVector f arr =
-  TwoHalfDArray .
   fromUnboxed (get25DArrayShape arr) .
   VU.concat .
-  L.map
-    (\i ->
-       f . toUnboxed . computeS . R.slice (get25DArray arr) $
-       (Z :. i :. All :. All)) $
+  L.map (\i -> f . toUnboxed . computeS . R.slice arr $ (Z :. i :. All :. All)) $
   [0 .. get25DArrayFeatures arr - 1]
 
 
 {-# INLINE mapVectorM #-}
 
 mapVectorM
-  :: (Unbox a, Monad m)
-  => (VU.Vector a -> m (VU.Vector a)) -> TwoHalfDArray a -> m (TwoHalfDArray a)
+  :: (Source s e, Unbox e, Monad m)
+  => (VU.Vector e -> m (VU.Vector e)) -> Array s DIM3 e -> m (Array U DIM3 e)
 mapVectorM f arr = do
   xs <-
     M.mapM
-      (\i ->
-         f . toUnboxed . computeS . R.slice (get25DArray arr) $
-         (Z :. i :. All :. All)) $
+      (\i -> f . toUnboxed . computeS . R.slice arr $ (Z :. i :. All :. All)) $
     [0 .. get25DArrayFeatures arr - 1]
-  return . TwoHalfDArray . fromUnboxed (get25DArrayShape arr) . VU.concat $ xs
+  return . fromUnboxed (get25DArrayShape arr) . VU.concat $ xs

@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+
 module Src.Array.CoordinatesTransform
   ( module Src.Array.CoordinatesTransform
   , module Src.Array.TwoHalfDArray
@@ -69,81 +70,86 @@ polar2Cartesian2D rows cols polarR valRange (centerR, centerC) arr =
                valRange
                (theta / deltaTheta, radius / deltaR))
 
-
 {-# INLINE cartesian2polar #-}
 
 cartesian2polar
-  :: Int
+  :: (Source s Double)
+  => Int
   -> Int
   -> (Double, Double)
   -> Double
   -> (Double, Double)
-  -> TwoHalfDArray Double
-  -> TwoHalfDArray Double
-cartesian2polar ts rs (cRow, cCol) polarR valRange =
-  mapArray (computeS . cartesian2polar2D ts rs (cRow, cCol) polarR valRange)
+  -> Array s DIM3 Double
+  -> Array U DIM3 Double
+cartesian2polar ts rs center polarR valRange =
+  mapArray (computeS . cartesian2polar2D ts rs center polarR valRange)
 
 
 {-# INLINE polar2Cartesian #-}
 
 polar2Cartesian
-  :: Int
+  :: (R.Source s Double)
+  => Int
   -> Int
   -> Double
   -> (Double, Double)
   -> (Double, Double)
-  -> TwoHalfDArray Double
-  -> TwoHalfDArray Double 
-polar2Cartesian rows cols polarR valRange (centerR, centerC) =
-  mapArray
-    (computeS . polar2Cartesian2D rows cols polarR valRange (centerR, centerC))
+  -> Array s DIM3 Double
+  -> Array U DIM3 Double 
+polar2Cartesian rows cols polarR valRange center =
+  mapArray (computeS . polar2Cartesian2D rows cols polarR valRange center)
 
 
 {-# INLINE cartesian2polarC #-}
 
 cartesian2polarC
-  :: Int
+  :: (R.Source s (Complex Double))
+  => Int
   -> Int
   -> (Double, Double)
   -> Double
   -> (Double, Double)
-  -> TwoHalfDArray (Complex Double)
-  -> TwoHalfDArray (Complex Double)
-cartesian2polarC ts rs (cRow, cCol) polarR valRange arr =
+  -> Array s DIM3 (Complex Double)
+  -> Array U DIM3 (Complex Double)
+cartesian2polarC ts rs center polarR valRange arr =
   let (x, y) =
-        VU.unzip . VU.map (\(a :+ b) -> (a, b)) . toUnboxed . get25DArray $ arr
-      arrX = TwoHalfDArray . fromUnboxed (get25DArrayShape arr) $ x
-      arrY = TwoHalfDArray . fromUnboxed (get25DArrayShape arr) $ y
-  in zipWith25DArray
+        VU.unzip . VU.map (\(a :+ b) -> (a, b)) . toUnboxed . computeS . delay $
+        arr
+      arrX = fromUnboxed (get25DArrayShape arr) $ x
+      arrY = fromUnboxed (get25DArrayShape arr) $ y
+  in computeS $
+     R.zipWith
        (:+)
        (mapArray
-          (computeS . cartesian2polar2D ts rs (cRow, cCol) polarR valRange)
+          (computeS . cartesian2polar2D ts rs center polarR valRange)
           arrX)
        (mapArray
-          (computeS . cartesian2polar2D ts rs (cRow, cCol) polarR valRange)
+          (computeS . cartesian2polar2D ts rs center polarR valRange)
           arrY)
 
 {-# INLINE polar2CartesianC #-}
 
 polar2CartesianC
-  :: Int
+  :: (R.Source s (Complex Double))
+  => Int
   -> Int
   -> Double
   -> (Double, Double)
   -> (Double, Double)
-  -> TwoHalfDArray (Complex Double)
-  -> TwoHalfDArray (Complex Double) 
-polar2CartesianC rows cols polarR valRange (centerR, centerC) arr =
+  -> Array s DIM3 (Complex Double)
+  -> Array U DIM3 (Complex Double) 
+polar2CartesianC rows cols polarR valRange center arr =
   let (x, y) =
-        VU.unzip . VU.map (\(a :+ b) -> (a, b)) . toUnboxed . get25DArray $ arr
-      arrX = TwoHalfDArray . fromUnboxed (get25DArrayShape arr) $ x
-      arrY = TwoHalfDArray . fromUnboxed (get25DArrayShape arr) $ y
-  in zipWith25DArray (:+)
-     (mapArray
-        (computeS .
-         polar2Cartesian2D rows cols polarR valRange (centerR, centerC))
-        arrX)
+        VU.unzip . VU.map (\(a :+ b) -> (a, b)) . toUnboxed . computeS . delay $
+        arr
+      arrX = fromUnboxed (get25DArrayShape arr) $ x
+      arrY = fromUnboxed (get25DArrayShape arr) $ y
+  in computeS $
+     R.zipWith
+       (:+)
        (mapArray
-          (computeS .
-           polar2Cartesian2D rows cols polarR valRange (centerR, centerC))
+          (computeS . polar2Cartesian2D rows cols polarR valRange center)
+          arrX)
+       (mapArray
+          (computeS . polar2Cartesian2D rows cols polarR valRange center)
           arrY)

@@ -256,26 +256,31 @@ rescale2D (newNy, newNx) bound arr =
 
 {-# INLINE rescale25D #-}
 
-rescale25D :: (Int, Int)
-           -> (Double, Double)
-           -> TwoHalfDArray Double
-           -> TwoHalfDArray Double
+rescale25D
+  :: (Source s Double)
+  => (Int, Int)
+  -> (Double, Double)
+  -> Array s DIM3 Double
+  -> Array U DIM3 Double
 rescale25D newSize bound arr =
   mapArray (computeUnboxedS . rescale2D newSize bound) arr
 
 {-# INLINE rescale25DC #-}
 
 rescale25DC
-  :: (Int, Int)
+  :: (Source s (Complex Double))
+  => (Int, Int)
   -> (Double, Double)
-  -> TwoHalfDArray (Complex Double)
-  -> TwoHalfDArray (Complex Double)
+  -> Array s DIM3 (Complex Double)
+  -> Array U DIM3 (Complex Double)
 rescale25DC newSize bound arr =
   let (x, y) =
-        VU.unzip . VU.map (\(a :+ b) -> (a, b)) . toUnboxed . get25DArray $ arr
-      arrX = TwoHalfDArray . fromUnboxed (get25DArrayShape arr) $ x
-      arrY = TwoHalfDArray . fromUnboxed (get25DArrayShape arr) $ y
-  in zipWith25DArray
+        VU.unzip . VU.map (\(a :+ b) -> (a, b)) . toUnboxed . computeS . delay $
+        arr
+      arrX = fromUnboxed (get25DArrayShape arr) $ x
+      arrY = fromUnboxed (get25DArrayShape arr) $ y
+  in computeS $
+     R.zipWith
        (:+)
        (rescale25D newSize bound arrX)
        (rescale25D newSize bound arrY)
@@ -311,28 +316,27 @@ resize2D n (minVal, maxVal) arr =
 
 {-# INLINE resize25D #-}
 
-resize25D :: Int
-          -> (Double, Double)
-          -> TwoHalfDArray Double
-          -> TwoHalfDArray Double
+resize25D
+  :: (R.Source s Double)
+  => Int -> (Double, Double) -> Array s DIM3 Double -> Array U DIM3 Double
 resize25D newSize bound arr = mapArray (computeS . resize2D newSize bound) arr
 
 {-# INLINE resize25DC #-}
 
 resize25DC
-  :: Int
+  :: (R.Source s (Complex Double))
+  => Int
   -> (Double, Double)
-  -> TwoHalfDArray (Complex Double)
-  -> TwoHalfDArray (Complex Double)
+  -> Array s DIM3 (Complex Double)
+  -> Array U DIM3 (Complex Double)
 resize25DC newSize bound arr =
   let (x, y) =
-        VU.unzip . VU.map (\(a :+ b) -> (a, b)) . toUnboxed . get25DArray $ arr
-      arrX = TwoHalfDArray . fromUnboxed (get25DArrayShape arr) $ x
-      arrY = TwoHalfDArray . fromUnboxed (get25DArrayShape arr) $ y
-  in zipWith25DArray
-       (:+)
-       (resize25D newSize bound arrX)
-       (resize25D newSize bound arrY)
+        VU.unzip . VU.map (\(a :+ b) -> (a, b)) . toUnboxed . computeS . delay $
+        arr
+      arrX = fromUnboxed (get25DArrayShape arr) $ x
+      arrY = fromUnboxed (get25DArrayShape arr) $ y
+  in computeS $
+     R.zipWith (:+) (resize25D newSize bound arrX) (resize25D newSize bound arrY)
 
 
 {-# INLINE rotatePixel #-}
