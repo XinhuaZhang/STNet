@@ -34,7 +34,7 @@ instance Functor Image where
 readImagePathList :: FilePath -> IO [String]
 readImagePathList = fmap lines . readFile
 
-imagePathSource :: FilePath -> C.Source (ResourceT IO) FilePath
+imagePathSource :: FilePath -> ConduitT () FilePath (ResourceT IO) ()
 imagePathSource filePath = do
   pathList <- liftIO $ readImagePathList filePath
   sourceList pathList
@@ -171,7 +171,7 @@ readImageRepa filePath isColor = do
                                (fromIntegral b))
 
 
-readImageConduit :: Bool -> Conduit FilePath (ResourceT IO) ImageRepa
+readImageConduit :: Bool -> ConduitT FilePath ImageRepa (ResourceT IO) ()
 readImageConduit isColor =
   awaitForever
     (\filePath -> do
