@@ -7,3 +7,5 @@ TAGS
 .cabal-sandbox
 cabal.sandbox.config
 *.png
+weightSharingTest
+plotSTHarmonics

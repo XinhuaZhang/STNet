@@ -106,7 +106,11 @@ solveMonteCarlo numGen numTrails numPoints numOrientations sigma len init@(_, _,
     (thetaCheck theta)
     (error $ "solveMonteCarlo: theta out of boundary.\n" L.++ show theta)
   gens <- M.replicateM numGen newStdGen
-  let xs = parMap rdeepseq (generatePathList numTrails sigma len init) gens
+  let xs =
+        parMap
+          rdeepseq
+          (generatePathList (div numTrails numGen) sigma len init)
+          gens
       (ys, zs) = L.unzip $ parMap rdeepseq (count numPoints numOrientations) xs
       totalNum = fromIntegral $ L.sum ys
       totalNumVec = L.foldl1' (VU.zipWith (+)) zs

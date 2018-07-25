@@ -363,6 +363,55 @@ vecMatMult (x, y) vec = (a * x + c * y, b * x + d * y)
     c = vec VU.! 2
     d = vec VU.! 3
 
+{-# INLINE rotate2D #-}
+
+rotate2D
+  :: (R.Source s Double)
+  => Double -> (Double, Double) -> Array s DIM2 Double -> Array D DIM2 Double
+rotate2D deg valRange arr =
+  let (Z :. rows :. cols) = extent arr
+      ds = computeDerivativeS (computeUnboxedS . delay $ arr)
+      centerR = fromIntegral (rows - 1) / 2
+      centerC = fromIntegral (cols - 1) / 2
+  in fromFunction
+       (extent arr)
+       (\(Z :. j :. i) ->
+          let (j', i') =
+                rotatePixel
+                  (VU.fromListN 4 $
+                   P.map (\f -> f (deg2Rad deg)) [cos, sin, \x -> -(sin x), cos])
+                  (centerR, centerC)
+                  (fromIntegral j, fromIntegral i)
+          in if j' < 0 ||
+                j' > (fromIntegral rows - 1) ||
+                i' < 0 || i' > (fromIntegral cols - 1)
+               then 0
+               else bicubicInterpolation ds valRange (j', i'))
+
+{-# INLINE rotate25D #-}
+
+rotate25D
+  :: (R.Source s Double)
+  => Double -> (Double, Double) -> Array s DIM3 Double -> Array U DIM3 Double
+rotate25D deg valRange arr = mapArray (computeS . rotate2D deg valRange) arr
+
+{-# INLINE rotate25DC #-}
+
+rotate25DC
+  :: (R.Source s (Complex Double))
+  => Double
+  -> (Double, Double)
+  -> Array s DIM3 (Complex Double)
+  -> Array U DIM3 (Complex Double)
+rotate25DC deg valRange arr =
+  let (x, y) =
+        VU.unzip . VU.map (\(a :+ b) -> (a, b)) . toUnboxed . computeS . delay $
+        arr
+      arrX = fromUnboxed (get25DArrayShape arr) $ x
+      arrY = fromUnboxed (get25DArrayShape arr) $ y
+  in computeS $
+     R.zipWith (:+) (rotate25D deg valRange arrX) (rotate25D deg valRange arrY)
+
 
 -- First pading a 2D array to a square array then rotating it
 padResizeRotate2DArray
@@ -399,7 +448,7 @@ padResizeRotate2DArray n (minVal, maxVal) degs arr =
     ds = computeDerivativeS (computeUnboxedS paddedImg)
     center = fromIntegral (n - 1) / 2
     ratio = fromIntegral (m - 1) / fromIntegral (n - 1)
-
+    
 
 -- a x b x c -> c x b x a
 {-# INLINE rotate3D #-}
