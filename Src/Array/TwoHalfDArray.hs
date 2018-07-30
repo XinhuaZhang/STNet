@@ -90,72 +90,72 @@ get25DArray2DList arr =
 
 -- Replicating a 2D operation on the feature dimension.
 
-{-# INLINE mapArray #-}
+{-# INLINE map25DArray #-}
 
-mapArray
+map25DArray
   :: (Source s e, Unbox e)
   => (Array D DIM2 e -> Array U DIM2 e) -> Array s DIM3 e -> Array U DIM3 e
-mapArray f arr =
+map25DArray f arr =
   fromUnboxed (get25DArrayShape arr) .
   VU.concat . L.map (\i -> toUnboxed . f . R.slice arr $ (Z :. i :. All :. All)) $
   [0 .. get25DArrayFeatures arr - 1]
 
-{-# INLINE mapArrayP #-}
+{-# INLINE map25DArrayP #-}
 
-mapArrayP
+map25DArrayP
   :: (Source s e, Unbox e)
   => (Array D DIM2 e -> Array U DIM2 e) -> Array s DIM3 e -> Array U DIM3 e
-mapArrayP f arr =
+map25DArrayP f arr =
   fromUnboxed (get25DArrayShape arr) .
   VU.concat .
   parMap rdeepseq (\i -> toUnboxed . f . R.slice arr $ (Z :. i :. All :. All)) $
   [0 .. get25DArrayFeatures arr - 1]
 
 
-{-# INLINE mapArrayM #-}
+{-# INLINE map25DArrayM #-}
 
-mapArrayM
+map25DArrayM
   :: (Source s e, Unbox e, Monad m)
   => (Array D DIM2 e -> m (Array U DIM2 e))
   -> Array s DIM3 e
   -> m (Array U DIM3 e)
-mapArrayM f arr = do
+map25DArrayM f arr = do
   xs <-
     M.mapM (\i -> fmap toUnboxed . f . R.slice arr $ (Z :. i :. All :. All)) $
     [0 .. get25DArrayFeatures arr - 1]
   return . fromUnboxed (get25DArrayShape arr) . VU.concat $ xs
   
-{-# INLINE mapArrayMP #-}
+{-# INLINE map25DArrayMP #-}
 
-mapArrayMP
+map25DArrayMP
   :: (Source s e, Unbox e, MonadParallel m)
   => (Array D DIM2 e -> m (Array U DIM2 e))
   -> Array s DIM3 e
   -> m (Array U DIM3 e)
-mapArrayMP f arr = do
+map25DArrayMP f arr = do
   xs <-
     MP.mapM (\i -> fmap toUnboxed . f . R.slice arr $ (Z :. i :. All :. All)) $
     [0 .. get25DArrayFeatures arr - 1]
   return . fromUnboxed (get25DArrayShape arr) . VU.concat $ xs
 
 
-{-# INLINE mapVector #-}
+{-# INLINE map25DVector #-}
 
-mapVector
+map25DVector
   :: (Source s e, Unbox e)
   => (VU.Vector e -> VU.Vector e) -> Array s DIM3 e -> Array U DIM3 e
-mapVector f arr =
+map25DVector f arr =
   fromUnboxed (get25DArrayShape arr) .
   VU.concat .
   L.map (\i -> f . toUnboxed . computeS . R.slice arr $ (Z :. i :. All :. All)) $
   [0 .. get25DArrayFeatures arr - 1]
   
-{-# INLINE mapVectorP #-}
+{-# INLINE map25DVectorP #-}
 
-mapVectorP
+map25DVectorP
   :: (Source s e, Unbox e)
   => (VU.Vector e -> VU.Vector e) -> Array s DIM3 e -> Array U DIM3 e
-mapVectorP f arr =
+map25DVectorP f arr =
   fromUnboxed (get25DArrayShape arr) .
   VU.concat .
   parMap
@@ -164,26 +164,40 @@ mapVectorP f arr =
   [0 .. get25DArrayFeatures arr - 1]
 
 
-{-# INLINE mapVectorM #-}
+{-# INLINE map25DVectorM #-}
 
-mapVectorM
+map25DVectorM
   :: (Source s e, Unbox e, Monad m)
   => (VU.Vector e -> m (VU.Vector e)) -> Array s DIM3 e -> m (Array U DIM3 e)
-mapVectorM f arr = do
+map25DVectorM f arr = do
   xs <-
     M.mapM
       (\i -> f . toUnboxed . computeS . R.slice arr $ (Z :. i :. All :. All)) $
     [0 .. get25DArrayFeatures arr - 1]
   return . fromUnboxed (get25DArrayShape arr) . VU.concat $ xs
   
-{-# INLINE mapVectorMP #-}
+{-# INLINE map25DVectorMP #-}
 
-mapVectorMP
+map25DVectorMP
   :: (Source s e, Unbox e, MonadParallel m)
   => (VU.Vector e -> m (VU.Vector e)) -> Array s DIM3 e -> m (Array U DIM3 e)
-mapVectorMP f arr = do
+map25DVectorMP f arr = do
   xs <-
     MP.mapM
       (\i -> f . toUnboxed . computeS . R.slice arr $ (Z :. i :. All :. All)) $
     [0 .. get25DArrayFeatures arr - 1]
   return . fromUnboxed (get25DArrayShape arr) . VU.concat $ xs
+
+
+{-# INLINE zipWith25D #-}
+
+zipWith25D
+  :: (Source s1 a, Source s2 b, Unbox a, Unbox b, Unbox c)
+  => (a -> b -> c) -> Array s1 DIM3 a -> Array s2 DIM2 b -> Array D DIM3 c
+zipWith25D f arr1 arr2 =
+  R.traverse2
+    arr1
+    arr2
+    const
+    (\f3D f2D (Z :. k :. i :. j) ->
+       f (f3D (Z :. k :. i :. j)) (f2D (Z :. i :. j)))

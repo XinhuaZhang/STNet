@@ -82,7 +82,7 @@ cartesian2polar
   -> Array s DIM3 Double
   -> Array U DIM3 Double
 cartesian2polar ts rs center polarR valRange =
-  mapArray (computeS . cartesian2polar2D ts rs center polarR valRange)
+  map25DArray (computeS . cartesian2polar2D ts rs center polarR valRange)
 
 
 {-# INLINE polar2Cartesian #-}
@@ -97,7 +97,7 @@ polar2Cartesian
   -> Array s DIM3 Double
   -> Array U DIM3 Double 
 polar2Cartesian rows cols polarR valRange center =
-  mapArray (computeS . polar2Cartesian2D rows cols polarR valRange center)
+  map25DArray (computeS . polar2Cartesian2D rows cols polarR valRange center)
 
 
 {-# INLINE cartesian2polarC #-}
@@ -120,10 +120,10 @@ cartesian2polarC ts rs center polarR valRange arr =
   in computeS $
      R.zipWith
        (:+)
-       (mapArray
+       (map25DArray
           (computeS . cartesian2polar2D ts rs center polarR valRange)
           arrX)
-       (mapArray
+       (map25DArray
           (computeS . cartesian2polar2D ts rs center polarR valRange)
           arrY)
 
@@ -147,9 +147,9 @@ polar2CartesianC rows cols polarR valRange center arr =
   in computeS $
      R.zipWith
        (:+)
-       (mapArray
+       (map25DArray
           (computeS . polar2Cartesian2D rows cols polarR valRange center)
           arrX)
-       (mapArray
+       (map25DArray
           (computeS . polar2Cartesian2D rows cols polarR valRange center)
           arrY)

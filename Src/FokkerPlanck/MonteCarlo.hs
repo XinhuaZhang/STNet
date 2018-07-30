@@ -39,7 +39,8 @@ thetaCheck theta
 generatePath
   :: (RandomGen g)
   => g -> Double -> Int -> ParticleIndex -> (g, VU.Vector ParticleIndex)
-generatePath randomGen sigma n init = second VU.fromList . go randomGen n $ init
+generatePath randomGen sigma len init =
+  second VU.fromList . go randomGen len $ init
   where
     go rGen 0 _ = (rGen, [])
     go rGen n (x, y, theta) =
@@ -55,9 +56,9 @@ generatePathList
   :: (RandomGen g)
   => Int ->  Double -> Int -> ParticleIndex -> g -> [VU.Vector ParticleIndex]
 generatePathList 0 _ _ _ _ = []
-generatePathList m sigma n init randomGen =
-  let (newGen, x) = generatePath randomGen sigma n init
-      xs = generatePathList (m - 1) sigma n init newGen
+generatePathList m sigma len init randomGen =
+  let (newGen, x) = generatePath randomGen sigma len init
+      xs = generatePathList (m - 1) sigma len init newGen
   in x : xs
 
 {-# INLINE count #-}

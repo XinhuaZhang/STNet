@@ -9,3 +9,4 @@ cabal.sandbox.config
 *.png
 weightSharingTest
 plotSTHarmonics
+/App/STHarmonics/rotationTest

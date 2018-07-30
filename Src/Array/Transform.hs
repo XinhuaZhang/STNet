@@ -263,7 +263,7 @@ rescale25D
   -> Array s DIM3 Double
   -> Array U DIM3 Double
 rescale25D newSize bound arr =
-  mapArray (computeUnboxedS . rescale2D newSize bound) arr
+  map25DArray (computeUnboxedS . rescale2D newSize bound) arr
 
 {-# INLINE rescale25DC #-}
 
@@ -319,7 +319,7 @@ resize2D n (minVal, maxVal) arr =
 resize25D
   :: (R.Source s Double)
   => Int -> (Double, Double) -> Array s DIM3 Double -> Array U DIM3 Double
-resize25D newSize bound arr = mapArray (computeS . resize2D newSize bound) arr
+resize25D newSize bound arr = map25DArray (computeS . resize2D newSize bound) arr
 
 {-# INLINE resize25DC #-}
 
@@ -393,7 +393,7 @@ rotate2D deg valRange arr =
 rotate25D
   :: (R.Source s Double)
   => Double -> (Double, Double) -> Array s DIM3 Double -> Array U DIM3 Double
-rotate25D deg valRange arr = mapArray (computeS . rotate2D deg valRange) arr
+rotate25D deg valRange arr = map25DArray (computeS . rotate2D deg valRange) arr
 
 {-# INLINE rotate25DC #-}
 
