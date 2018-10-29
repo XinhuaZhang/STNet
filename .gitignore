@@ -10,3 +10,7 @@ cabal.sandbox.config
 weightSharingTest
 plotSTHarmonics
 /App/STHarmonics/rotationTest
+*.tgz
+/App/STHarmonics/generalizedConvolutionTest
+/App/STHarmonics/generalizedGreenGenerator
+GreensData

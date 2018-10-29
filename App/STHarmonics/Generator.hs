@@ -7,6 +7,8 @@ import           Src.Array.CoordinatesTransform
 import           Src.Array.Transform
 import           Src.Utils.Coordinates
 
+type R2S1Array = Array U DIM3 (Complex Double)
+
 -- (x,y,\theta) <-> (r,\theta_1, \theta_2) <-> (r, u, v)
 -- (x,y) <-> (r,\theta_1)
 -- u = (\theta_1 + \theta_2) / 2, v = (\theta_1 - \theta_2) / 2
@@ -29,8 +31,8 @@ generateSTHarmonicArray
   -> Int
   -> Double
   -> STHarmonicFlag
-  -> Array D DIM3 (Complex Double)
-generateSTHarmonicArray numTheta2 rows cols anglarFreq radialFreq alpha inverseFlag =
+  -> R2S1Array
+generateSTHarmonicArray numTheta2 rows cols angularFreq radialFreq alpha inverseFlag =
   let centerR = div rows 2
       centerC = div cols 2
       deltaTheta2 = 2 * pi / fromIntegral numTheta2
@@ -38,7 +40,8 @@ generateSTHarmonicArray numTheta2 rows cols anglarFreq radialFreq alpha inverseF
         case inverseFlag of
           STHarmonic -> (-1)
           STInverseHarmonic -> 1
-  in fromFunction
+  in computeS $
+     fromFunction
        (Z :. numTheta2 :. rows :. cols)
        (\(Z :. k :. i :. j) ->
           let x = fromIntegral $ i - centerR
@@ -52,5 +55,5 @@ generateSTHarmonicArray numTheta2 rows cols anglarFreq radialFreq alpha inverseF
                     exp
                       (0 :+
                        (sign *
-                        ((fromIntegral anglarFreq) * (theta1 + theta2) / 2 +
+                        ((fromIntegral angularFreq) * (theta1 + theta2) / 2 +
                          (fromIntegral radialFreq) * (log r)))))

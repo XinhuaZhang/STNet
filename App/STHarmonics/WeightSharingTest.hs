@@ -17,18 +17,18 @@ data STPoint
   = Source (Double, Int, Int)
   | Sink (Double, Int, Int)
   deriving (Read,Show)
-  
+
 instance Eq STPoint where
   (==) (Source _) (Source _) = True
-  (==) (Sink _) (Sink _) = True
-  (==) (Source _) (Sink _) = False
-  (==) (Sink _) (Source _) = False
-  
+  (==) (Sink _) (Sink _)     = True
+  (==) (Source _) (Sink _)   = False
+  (==) (Sink _) (Source _)   = False
+
 instance Ord STPoint where
   compare (Source x) (Source y) = compare x y
-  compare (Sink x) (Sink y) = compare x y
-  compare (Source _) (Sink _) = LT
-  compare (Sink _) (Source _) = GT
+  compare (Sink x) (Sink y)     = compare x y
+  compare (Source _) (Sink _)   = LT
+  compare (Sink _) (Source _)   = GT
 
 
 {-# INLINE reduceContrast #-}
@@ -43,7 +43,7 @@ reduceContrast idx vec =
             then x
             else y)
        vec
-       
+
 {-# INLINE checkDeg #-}
 
 checkDeg :: Double -> Double
@@ -53,7 +53,7 @@ checkDeg deg =
     else if deg >= 360
            then checkDeg (deg - 360)
            else deg
-           
+
 {-# INLINE combineArgs #-}
 
 combineArgs :: [String] -> [String]
