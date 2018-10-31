@@ -10,6 +10,7 @@ module Src.Utils.DFT.Plan
   , getEmptyPlan
   , dftExecuteWithPlan
   , dftExecuteBatch
+  , dftExecuteBatchP
   , dftExecute
   , dft2dPlan
   , idft2dPlan
@@ -19,6 +20,7 @@ module Src.Utils.DFT.Plan
 
 import           Control.Concurrent.MVar
 import           Control.Monad                as M
+import           Control.Monad.Parallel       as MP
 import           Data.Complex
 import           Data.Hashable
 import           Data.HashMap.Strict          as HM
@@ -107,6 +109,20 @@ dftExecuteBatch hashMap planID@(DFTPlanID t d i) vecs =
       error $
       "dftExecuteBatch: couldn't find plan for ID " L.++ show planID
     Just plan -> M.mapM (dftExecuteWithPlan planID plan) vecs
+    
+{-# INLINE dftExecuteBatchP #-}
+
+dftExecuteBatchP
+  :: DFTPlan
+  -> DFTPlanID
+  -> [VS.Vector (Complex Double)]
+  -> IO [VS.Vector (Complex Double)]
+dftExecuteBatchP hashMap planID@(DFTPlanID t d i) vecs =
+  case HM.lookup planID hashMap of
+    Nothing ->
+      error $
+      "dftExecuteBatch: couldn't find plan for ID " L.++ show planID
+    Just plan -> MP.mapM (dftExecuteWithPlan planID plan) vecs
 
 {-# INLINE dftExecute #-}
 

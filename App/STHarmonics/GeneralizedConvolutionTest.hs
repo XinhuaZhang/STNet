@@ -1,6 +1,8 @@
 import           App.STHarmonics.GeneralizedConvolution
+import           App.STHarmonics.R2S1RPHarmonics
 import           App.STHarmonics.Utils
 import           Control.Monad                          as M
+import           Control.Parallel.Strategies
 import           Data.Array                             as Arr
 import           Data.Array.Repa                        as R
 import           Data.Complex
@@ -66,13 +68,15 @@ combineArgs (x:y:xs) = (x L.++ " " L.++ y) : combineArgs xs
 
 main = do
   args <- getArgs
+  print args
   let (orientations:size:len:trails:threads:contrastN:_) =
         L.map (\x -> read x :: Int) . L.take 6 $ args
-      (sigma:_) = L.map (\x -> read x :: Double) . L.drop 6 $ args
+      (sigma:angularFreq:radialFreq:alpha:_) =
+        L.map (\x -> read x :: Double) . L.drop 6 $ args
       -- Generate initial distribution: arrRepa
       (xs:ys:[]) =
         L.group .
-        L.sort . L.map (\x -> read x :: STPoint) . combineArgs . L.drop 7 $
+        L.sort . L.map (\x -> read x :: STPoint) . combineArgs . L.drop 10 $
         args
       arrSource =
         accumArray
@@ -82,26 +86,11 @@ main = do
         L.map (\idx -> (idx, 1 / (fromIntegral . L.length $ xs))) .
         L.map
           (\(Source (t, x, y)) ->
-             let theta1 =
-                   angleFunctionDeg
-                     (fromIntegral (x - div size 2))
-                     (fromIntegral (y - div size 2))
-                 theta2 = checkDeg t
-                 r =
-                   sqrt $
-                   (fromIntegral (x - div size 2)) ** 2 +
-                   (fromIntegral (y - div size 2)) ** 2
-                 theta3 = (theta1 - theta2) / 2
-                 x' = round $ r * (cos . deg2Rad $ theta3)
-                 y' = round $ r * (sin . deg2Rad $ theta3)
-             in ( x' + div size 2
-                , y' + div size 2
-                , floor $
-                  (checkDeg ((theta1 + theta2) / 2)) / 360 *
-                  fromIntegral orientations)) $
+             (x, y, floor ((checkDeg t) / 360 * fromIntegral orientations))) $
         xs
       arrSourceRepa =
-        fromListUnboxed (Z :. size :. size :. orientations) . Arr.elems $
+        fromListUnboxed (Z :. size :. size :. orientations) .
+        L.map (:+ 0) . Arr.elems $
         arrSource
       arrSink =
         accumArray
@@ -111,84 +100,94 @@ main = do
         L.map (\idx -> (idx, 1 / (fromIntegral . L.length $ xs))) .
         L.map
           (\(Sink (t, x, y)) ->
-             let theta1 =
-                   angleFunctionDeg
-                     (fromIntegral (x - div size 2))
-                     (fromIntegral (y - div size 2))
-                 theta2 = checkDeg t
-                 r =
-                   sqrt $
-                   (fromIntegral (x - div size 2)) ** 2 +
-                   (fromIntegral (y - div size 2)) ** 2
-                 theta3 = (theta1 - theta2) / 2
-                 x' = round $ r * (cos . deg2Rad $ theta3)
-                 y' = round $ r * (sin . deg2Rad $ theta3)
-             in ( x' + div size 2
-                , y' + div size 2
-                , floor $
-                  (checkDeg ((theta1 + theta2) / 2)) / 360 *
-                  fromIntegral orientations)) $
+             (x, y, floor ((checkDeg t) / 360 * fromIntegral orientations))) $
         ys
       arrSinkRepa =
-        fromListUnboxed (Z :. size :. size :. orientations) . Arr.elems $
+        fromListUnboxed (Z :. size :. size :. orientations) .
+        L.map (:+ 0) . Arr.elems $
         arrSink
+      r2s1Harmonics =
+        parMap
+          rseq
+          (\(af1, af2, rf) ->
+             generateR2S1HarmonicArray
+               orientations
+               size
+               size
+               af1
+               af2
+               rf
+               alpha
+               Harmonic)
+          [ (af1, af2, rf)
+          | af1 <- [-angularFreq .. angularFreq]
+          , af2 <- [-angularFreq .. angularFreq]
+          , rf <- [0 .. radialFreq]
+          ]
+      r2s1HarmonicsC =
+        parMap
+          rseq
+          (\(af1, af2, rf) ->
+             generateR2S1HarmonicArray
+               orientations
+               size
+               size
+               af1
+               af2
+               rf
+               alpha
+               ConjugateHarmonic)
+          [ (af1, af2, rf)
+          | af1 <- [-angularFreq .. angularFreq]
+          , af2 <- [-angularFreq .. angularFreq]
+          , rf <- [0 .. radialFreq]
+          ]
       folderName = "GreensData"
   print xs
   print ys
   arrG <-
+    (computeS . R.map (:+ 0)) <$>
     readRepaArray
       (folderName </>
-       ("GeneralizedGreens_" L.++ show size L.++ "_" L.++ show orientations L.++
-        "_" L.++
+       ("Greens_" L.++ show size L.++ "_" L.++ show orientations L.++ "_" L.++
         show sigma L.++
-        ".dat"))
+        ".dat")) :: IO (R.Array U DIM3 (Complex Double))
   -- Generate DFT plan
-  lock <- getFFTWLock
-  vecTemp1 <-
-    VS.fromList <$> M.replicateM (orientations * size * size) randomIO :: IO (VS.Vector Double)
-  vecTemp2 <-
-    VS.fromList <$> M.replicateM (orientations * size * size) randomIO :: IO (VS.Vector Double)
-  (dftPlan1, vecTemp4) <-
-    dft1dGPlan
-      lock
-      getEmptyPlan
-      [size, size, orientations]
-      [0, 1, 2]
-      (VS.zipWith mkPolar vecTemp1 vecTemp2)
-  (dftPlan, _) <-
-    idft1dGPlan lock dftPlan1 [size, size, orientations] [0, 1, 2] vecTemp4
+  dftPlan <- generateR2S1DFTPlan getEmptyPlan arrSinkRepa
   createDirectoryIfMissing True "GeneralizedConvolutionTest"
   plotImageRepa "GeneralizedConvolutionTest/green.png" .
     Image 8 .
     fromUnboxed (Z :. (1 :: Int) :. size :. size) .
-    R.toUnboxed . R.sumS . convert' $
+    R.toUnboxed . R.sumS . R.map magnitude $
     arrG
   -- Source Field
   outputSource <-
-    convolve
+    (computeS . R.map magnitude) <$>
+    convolveR2S1
       dftPlan
-      CrossCorrelationST
-      (computeS . makeFilter $ arrG)
+      (computeS . makeFilterR2S1 $ arrG)
       arrSourceRepa
+      r2s1Harmonics
+      r2s1HarmonicsC :: IO (R.Array U DIM3 Double)
   plotImageRepa "GeneralizedConvolutionTest/source.png" .
     Image 8 .
-    fromUnboxed (Z :. (1 :: Int) :. size :. size) .
-    R.toUnboxed . R.sumS . convert' $
+    fromUnboxed (Z :. (1 :: Int) :. size :. size) . R.toUnboxed . R.sumS $
     outputSource
   -- Sink Field
   outputSink <-
-    convolve
+    (timeReversalR2S1 . computeS . R.map magnitude) <$>
+    convolveR2S1
       dftPlan
-      CrossCorrelationST
-      (computeS . makeFilter $ arrG)
+      (computeS . makeFilterR2S1 $ arrG)
       arrSinkRepa
+      r2s1Harmonics
+      r2s1HarmonicsC
   plotImageRepa "GeneralizedConvolutionTest/sink.png" .
     Image 8 .
-    fromUnboxed (Z :. (1 :: Int) :. size :. size) .
-    R.toUnboxed . R.sumS . convert' $
+    fromUnboxed (Z :. (1 :: Int) :. size :. size) . R.toUnboxed . R.sumS $
     outputSink
   -- Completion field
   plotImageRepa "GeneralizedConvolutionTest/completionField.png" .
     Image 8 .
     fromUnboxed (Z :. (1 :: Int) :. size :. size) . R.toUnboxed . R.sumS $
-    R.zipWith (*) (convert' outputSource) (timeReversal . convert' $ outputSink)
+    R.zipWith (*) outputSource outputSink

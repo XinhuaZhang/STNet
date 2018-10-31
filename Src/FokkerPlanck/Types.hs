@@ -1,6 +1,6 @@
 module Src.FokkerPlanck.Types where
 
-type ParticleIndex = (Double,Double,Double)
+type ParticleIndex = (Double,Double,Double,Double)
 
 -- data ParticleIndex = R2S1
 --   { getR2S1X     :: Double

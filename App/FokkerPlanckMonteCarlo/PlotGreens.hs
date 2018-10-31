@@ -26,13 +26,20 @@ main = do
       numOrientation = read numOrientationStr :: Int
       sigma = read sigmaStr :: Double
       len = read lenStr :: Int
-      init = read initStr :: (Double, Double, Double)
+      init = read initStr :: (Double, Double, Double, Double)
       numTrail = read numTrailStr :: Int
       numThread = read numThreadStr :: Int
   arr <-
-    solveMonteCarlo numThread numTrail numPoint numOrientation sigma len init
+    solveMonteCarloR2S1
+      numThread
+      numTrail
+      numPoint
+      numOrientation
+      sigma
+      len
+      init
   let arr' =
         computeS .
         reduceContrast 10 . R.extend (Z :. (1 :: Int) :. All :. All) . R.sumS $
         arr
-  plotImageRepa "test.png" . Image 8 $ arr'
+  plotImageRepa "GreensR2S1.png" . Image 8 $ arr'

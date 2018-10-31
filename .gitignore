@@ -14,3 +14,9 @@ plotSTHarmonics
 /App/STHarmonics/generalizedConvolutionTest
 /App/STHarmonics/generalizedGreenGenerator
 GreensData
+/App/FokkerPlanckMonteCarlo/plotGreensR2S1RP
+/App/STHarmonics/generalizedConvolutionTestR2S1RP
+/App/STHarmonics/generalizedConvolutionTestR2S1RP_1
+/App/STHarmonics/generalizedConvolutionTest_1
+/App/STHarmonics/greenGenerator
+/App/STHarmonics/greenGeneratorR2S1RP
