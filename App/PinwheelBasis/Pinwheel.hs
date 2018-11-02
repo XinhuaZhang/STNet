@@ -58,8 +58,16 @@ generateR2S1HarmonicArray rows cols angularFreq radialFreq alpha inverseFlag =
                  (af, rf) = f1d (Z :. k)
               in if r == 0
                    then 0
-                   else ((r :+ 0) ** (alpha :+ (sign * af))) *
-                        exp (0 :+ (sign * rf * theta)))
+                   else ((r :+ 0) ** (alpha :+ (sign * rf * 2 * pi / (fromIntegral $ div rows 2)))) *
+                        exp (0 :+ (sign * af * theta)))
    in case inverseFlag of
         Harmonic -> HarmoicArray $ arr
         ConjugateHarmonic -> ConjugateHarmoicArray $ arr
+
+
+{-# INLINE impulsiveCoefficients  #-}
+impulsiveCoefficients :: Double -> Double -> [Double] -> [Double] -> [Double]
+impulsiveCoefficients r theta angularFreqs radialFreqs =
+  L.map
+    (\(af, rf) -> exp $ 0 :+ ((-2 * pi) * (af + )))
+    [(af, rf) | af <- angularFreq, rf <- radialFreq]

@@ -13,9 +13,7 @@ import           Src.Utils.Coordinates
 import           Src.Utils.DFT
 import           System.Random
 
-
 {-# INLINE rotateRepa #-}
-
 rotateRepa :: (Source r e) => R.Array r DIM3 e -> R.Array D DIM3 e
 rotateRepa arr =
   let (Z :. a :. b :. c) = extent arr
@@ -24,9 +22,7 @@ rotateRepa arr =
         (\(Z :. i :. j :. k) -> (Z :. j :. k :. i))
         arr
 
-
 {-# INLINE projectFilter #-}
-
 projectFilter ::
      R.Array U DIM2 (Complex Double)
   -> HarmoicArray
@@ -38,9 +34,47 @@ projectFilter filter (HarmoicArray harmonics) =
     filter
     const
     (\f3d f2d idx@(Z :. i :. j :. k) -> f2d (Z :. i :. j) * f3d idx)
+    
+{-# INLINE projectFilterP #-}
+projectFilterP ::
+     R.Array U DIM2 (Complex Double)
+  -> HarmoicArray
+  -> IO (R.Array U DIM1 (Complex Double))
+projectFilterP filter (HarmoicArray harmonics) =
+  sumP . sumS . rotateRepa $
+  traverse2
+    harmonics
+    filter
+    const
+    (\f3d f2d idx@(Z :. i :. j :. k) -> f2d (Z :. i :. j) * f3d idx)
+
+{-# INLINE recoverFilter #-}
+recoverFilter ::
+     R.Array U DIM1 (Complex Double)
+  -> HarmoicArray
+  -> R.Array U DIM2 (Complex Double)
+recoverFilter freqs (ConjugateHarmoicArray harmonics) =
+  R.sumS $
+  traverse2
+    harmonics
+    freqs
+    const
+    (\f3d f1d idx@(Z :. i :. j :. k) -> (conjugate $ f3d idx) * f1d (Z :. k))
+    
+{-# INLINE recoverFilterP #-}
+recoverFilterP ::
+     R.Array U DIM1 (Complex Double)
+  -> HarmoicArray
+  -> IO (R.Array U DIM2 (Complex Double))
+recoverFilterP freqs (ConjugateHarmoicArray harmonics) =
+  R.sumP $
+  traverse2
+    harmonics
+    freqs
+    const
+    (\f3d f1d idx@(Z :. i :. j :. k) -> (conjugate $ f3d idx) * f1d (Z :. k))
 
 {-# INLINE makeFilter #-}
-
 makeFilter :: (R.Source s e) => R.Array s DIM3 e -> R.Array D DIM3 e
 makeFilter arr =
   let (Z :. rows :. cols :. _) = extent arr
@@ -61,7 +95,6 @@ makeFilter arr =
         arr
 
 {-# INLINE projectImage #-}
-
 projectImage ::
      DFTPlan
   -> R.Array U DIM2 (Complex Double)
@@ -76,20 +109,18 @@ projectImage plan img (HarmoicArray harmonics) = do
       harmonicsVec = VU.convert . toUnboxed . computeS . makeFilter $ harmonics
   imgVecF <- dftExecute plan planID2D imgVec
   harmonicsVecF <- dftExecute plan planID harmonicsVec
-  convolvedVec <-
-    dftExecute plan inversePlanID .
-    VU.convert .
-    toUnboxed .
-    computeS .
+  convolvedVecF <-
+    computeP .
     R.traverse2
       (fromUnboxed (extent harmonics) . VS.convert $ harmonicsVecF)
       (fromUnboxed (extent img) . VS.convert $ imgVecF)
       const $
     (\f3d f2d idx@(Z :. i :. j :. k) -> f2d (Z :. i :. j) * f3d idx)
+  convolvedVec <-
+    dftExecute plan inversePlanID . VU.convert . toUnboxed $ convolvedVecF
   return . fromUnboxed (extent harmonics) . VS.convert $ convolvedVec
 
 {-# INCLUDE recover #-}
-
 recover ::
      DFTPlan
   -> R.Array U DIM3 (Complex Double)
@@ -105,11 +136,10 @@ recover plan input (ConjugateHarmoicArray harmonics) = do
   harmonicsVecF <- dftExecute plan planID harmonicsVec
   convolvedVec <-
     dftExecute plan inversePlanID $
-    VS.zipWith (\a b -> a * conjugate b) inputVecF harmonicsVecF
+    VS.zipWith (\a b ->  a * conjugate b) inputVecF harmonicsVecF
   return . sumS . fromUnboxed (extent input) . VS.convert $ convolvedVec
 
 {-# INLINE convolve #-}
-
 convolve ::
      DFTPlan
   -> R.Array U DIM2 (Complex Double)
@@ -118,21 +148,19 @@ convolve ::
   -> HarmoicArray
   -> IO (R.Array U DIM2 (Complex Double))
 convolve plan filter input harmonics conjugateHarmonics = do
-  let filterF = projectFilter filter harmonics
+  filterF <- projectFilterP filter harmonics
   imgF <- projectImage plan input harmonics
-  let convolvedF =
-        computeS $
-        traverse2
-          imgF
-          filterF
-          const
-          (\f3d f1d idx@(Z :. i :. j :. k) -> f1d (Z :. k) * f3d idx)
+  convolvedF <-
+    computeP $
+    traverse2
+      imgF
+      filterF
+      const
+      (\f3d f1d idx@(Z :. i :. j :. k) -> (conjugate $ f1d (Z :. k)) * ( f3d idx))
   convolved <- recover plan convolvedF conjugateHarmonics
   return convolved
 
-
 {-# INLINE generateDFTPlan #-}
-
 generateDFTPlan :: DFTPlan -> R.Array U DIM3 (Complex Double) -> IO DFTPlan
 generateDFTPlan plan arr = do
   let (Z :. rows :. cols :. orientations) = extent arr
@@ -145,16 +173,11 @@ generateDFTPlan plan arr = do
     dft1dGPlan
       lock
       plan
-      ([rows,cols,orientations])
+      ([rows, cols, orientations])
       [0, 1]
       (VS.zipWith mkPolar vecTemp1 vecTemp2)
   (plan2, _) <-
-    idft1dGPlan
-      lock
-      plan1
-      ([rows,cols,orientations])
-      [0, 1]
-      vecTemp3
+    idft1dGPlan lock plan1 ([rows, cols, orientations]) [0, 1] vecTemp3
   vecTemp4 <-
     VS.fromList <$> M.replicateM (rows * cols) randomIO :: IO (VS.Vector Double)
   vecTemp5 <-
