@@ -21,3 +21,5 @@ GreensData
 /App/STHarmonics/greenGenerator
 /App/STHarmonics/greenGeneratorR2S1RP
 /App/PinwheelBasis/pinwheelShiftTwistWeightSharing
+/cabal.project
+/App/PinwheelBasis/localizationTest

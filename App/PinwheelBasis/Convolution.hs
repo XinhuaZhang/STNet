@@ -73,6 +73,33 @@ recoverFilterP freqs (ConjugateHarmoicArray harmonics) =
     freqs
     const
     (\f3d f1d idx@(Z :. i :. j :. k) -> (conjugate $ f3d idx) * f1d (Z :. k))
+    
+
+{-# INLINE recoverFilter' #-}
+recoverFilter' ::
+     R.Array U DIM1 (Complex Double)
+  -> HarmoicArray
+  -> R.Array U DIM2 (Complex Double)
+recoverFilter' freqs (ConjugateHarmoicArray harmonics) =
+  R.sumS $
+  traverse2
+    harmonics
+    freqs
+    const
+    (\f3d f1d idx@(Z :. i :. j :. k) -> (f3d idx) * f1d (Z :. k))
+
+{-# INLINE recoverFilterP' #-}
+recoverFilterP' ::
+     R.Array U DIM1 (Complex Double)
+  -> HarmoicArray
+  -> IO (R.Array U DIM2 (Complex Double))
+recoverFilterP' freqs (ConjugateHarmoicArray harmonics) =
+  R.sumP $
+  traverse2
+    harmonics
+    freqs
+    const
+    (\f3d f1d idx@(Z :. i :. j :. k) -> (f3d idx) * f1d (Z :. k))
 
 {-# INLINE makeFilter #-}
 makeFilter :: (R.Source s e) => R.Array s DIM3 e -> R.Array D DIM3 e
