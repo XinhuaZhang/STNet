@@ -67,13 +67,13 @@ generateR2S1HarmonicArray numTheta2 rows cols angularFreq1 angularFreq2 radialFr
                  theta2 = deltaTheta2 * fromIntegral k
                  r = sqrt $ x ^ (2 :: Int) + y ^ (2 :: Int)
              in if r == 0
-                  then 1
+                  then 0
                   else (((r :+ 0) ** (alpha :+ (sign * radialFreq)))) *
                        exp
                          (0 :+
                           (sign *
-                           (angularFreq1 * theta2 +
-                            angularFreq2 * (theta2 - theta1)))))
+                           (angularFreq1 * (theta2 + theta1) / 2   +
+                            angularFreq2 * (theta2 - theta1) / (2)))))
   in deepSeqArray arr $
      case inverseFlag of
        Harmonic -> R2S1Harmonic . HarmoicArray $ arr
@@ -110,13 +110,13 @@ generateR2S1HarmonicArray1 numTheta2 rows cols angularFreq1 angularFreq2 radialF
                  theta2 = deltaTheta2 * fromIntegral k
                  r = sqrt $ x ^ (2 :: Int) + y ^ (2 :: Int)
              in if r == 0
-                  then 1
+                  then 0
                   else (((r :+ 0) ** (alpha :+ (sign * radialFreq)))) *
                        exp
                          (0 :+
                           (sign *
-                           (-- angularFreq1 * theta1 / 2 +
-                            angularFreq2 * (theta2 - theta1)))))
+                           (angularFreq1 * (theta2 + theta1) /2  +
+                            angularFreq2 * (theta2 - theta1) / 2))))
   in deepSeqArray arr $
      case inverseFlag of
        Harmonic -> R2S1Harmonic . HarmoicArray $ arr

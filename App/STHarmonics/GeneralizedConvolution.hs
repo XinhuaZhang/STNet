@@ -53,7 +53,8 @@ projectFilterR2S1 :: R.Array U DIM3 (Complex Double)
                   -> [R2S1RPHarmonic]
                   -> [Complex Double]
 projectFilterR2S1 arr =
-  project arr . L.map (\(R2S1Harmonic (HarmoicArray harmonic)) -> harmonic)
+  project arr -- . L.map (computeS . makeFilterR2S1)
+  . L.map (\(R2S1Harmonic (HarmoicArray harmonic)) -> harmonic)
 
 
 {-# INLINE recoverFilterR2S1 #-}

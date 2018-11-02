@@ -187,37 +187,48 @@ main = do
        ("Greens_" L.++ show size L.++ "_" L.++ show orientations L.++ "_" L.++
         show sigma L.++
         ".dat")) :: IO (R.Array U DIM3 (Complex Double))
+  createDirectoryIfMissing False "GeneralizedConvolutionTest"
   let a = projectFilterR2S1 arrG r2s1Harmonics1
       b = projectFilterR2S1 arrSourceRepa r2s1Harmonics
       c = L.zipWith (*) a $ b
-  d <- recoverFilterR2S1P a r2s1HarmonicsC1
-  -- e <- recoverFilterR2S1P c r2s1HarmonicsC
-  plotImageRepa "GeneralizedConvolutionTest/recon1.png" .
-    Image 8 .
-    fromUnboxed (Z :. (1 :: Int) :. size :. size) .
-    R.toUnboxed . R.sumS . R.map magnitude $
-    d
-  -- plotImageRepa "GeneralizedConvolutionTest/recon2.png" .
+  -- d <- recoverFilterR2S1P a r2s1HarmonicsC1
+  -- -- e <- recoverFilterR2S1P c r2s1HarmonicsC
+  -- plotImageRepa "GeneralizedConvolutionTest/recon1.png" .
   --   Image 8 .
   --   fromUnboxed (Z :. (1 :: Int) :. size :. size) .
   --   R.toUnboxed . R.sumS . R.map magnitude $
-  --   e
-  plotImageRepa "GeneralizedConvolutionTest/green.png" .
-    Image 8 .
-    fromUnboxed (Z :. (1 :: Int) :. size :. size) .
-    R.toUnboxed . R.sumS . R.map magnitude $
-    arrG
+  --   d
+  -- -- plotImageRepa "GeneralizedConvolutionTest/recon2.png" .
+  -- --   Image 8 .
+  -- --   fromUnboxed (Z :. (1 :: Int) :. size :. size) .
+  -- --   R.toUnboxed . R.sumS . R.map magnitude $
+  -- --   e
+  -- plotImageRepa "GeneralizedConvolutionTest/green.png" .
+  --   Image 8 .
+  --   fromUnboxed (Z :. (1 :: Int) :. size :. size) .
+  --   R.toUnboxed . R.sumS . R.map magnitude $
+  --   arrG
   -- Generate DFT plan
   dftPlan <- generateR2S1DFTPlan getEmptyPlan arrSourceRepa
-  f <- projectR2S1 dftPlan arrSourceRepa r2s1Harmonics
-  g <- recoverR2S1 dftPlan f r2s1HarmonicsC
-  plotImageRepa "GeneralizedConvolutionTest/recon3.png" .
-    Image 8 .
-    fromUnboxed (Z :. (1 :: Int) :. size :. size) .
-    R.toUnboxed . R.sumS . R.map magnitude $
-    g
-  h <- convolveR2S1 dftPlan arrG arrSourceRepa r2s1Harmonics r2s1Harmonics1 r2s1HarmonicsC
-  plotImageRepa "GeneralizedConvolutionTest/recon4.png" .
+  -- f <- projectR2S1 dftPlan arrSourceRepa r2s1Harmonics
+  -- g <- recoverR2S1 dftPlan f r2s1HarmonicsC
+  -- plotImageRepa "GeneralizedConvolutionTest/recon3.png" .
+  --   Image 8 .
+  --   fromUnboxed (Z :. (1 :: Int) :. size :. size) .
+  --   R.toUnboxed . R.sumS . R.map magnitude $
+  --   g
+  h <-
+    convolveR2S1
+      dftPlan
+      arrG
+      arrSourceRepa
+      r2s1Harmonics
+      r2s1Harmonics1
+      r2s1HarmonicsC
+  plotImageRepa
+    ("GeneralizedConvolutionTest/recon4_" L.++
+     (show . (\(Source (t, _, _)) -> t) . L.head $ xs) L.++
+     ".png") .
     Image 8 .
     fromUnboxed (Z :. (1 :: Int) :. size :. size) .
     R.toUnboxed . R.sumS . R.map magnitude $
