@@ -25,9 +25,9 @@ rotateRepa arr =
 {-# INLINE projectFilter #-}
 projectFilter ::
      R.Array U DIM2 (Complex Double)
-  -> HarmoicArray
+  -> HarmonicArray
   -> R.Array U DIM1 (Complex Double)
-projectFilter filter (HarmoicArray harmonics) =
+projectFilter filter (HarmonicArray harmonics) =
   sumS . sumS . rotateRepa $
   traverse2
     harmonics
@@ -38,9 +38,9 @@ projectFilter filter (HarmoicArray harmonics) =
 {-# INLINE projectFilterP #-}
 projectFilterP ::
      R.Array U DIM2 (Complex Double)
-  -> HarmoicArray
+  -> HarmonicArray
   -> IO (R.Array U DIM1 (Complex Double))
-projectFilterP filter (HarmoicArray harmonics) =
+projectFilterP filter (HarmonicArray harmonics) =
   sumP . sumS . rotateRepa $
   traverse2
     harmonics
@@ -51,9 +51,9 @@ projectFilterP filter (HarmoicArray harmonics) =
 {-# INLINE recoverFilter #-}
 recoverFilter ::
      R.Array U DIM1 (Complex Double)
-  -> HarmoicArray
+  -> HarmonicArray
   -> R.Array U DIM2 (Complex Double)
-recoverFilter freqs (ConjugateHarmoicArray harmonics) =
+recoverFilter freqs (ConjugateHarmonicArray harmonics) =
   R.sumS $
   traverse2
     harmonics
@@ -64,9 +64,9 @@ recoverFilter freqs (ConjugateHarmoicArray harmonics) =
 {-# INLINE recoverFilterP #-}
 recoverFilterP ::
      R.Array U DIM1 (Complex Double)
-  -> HarmoicArray
+  -> HarmonicArray
   -> IO (R.Array U DIM2 (Complex Double))
-recoverFilterP freqs (ConjugateHarmoicArray harmonics) =
+recoverFilterP freqs (ConjugateHarmonicArray harmonics) =
   R.sumP $
   traverse2
     harmonics
@@ -78,9 +78,9 @@ recoverFilterP freqs (ConjugateHarmoicArray harmonics) =
 {-# INLINE recoverFilter' #-}
 recoverFilter' ::
      R.Array U DIM1 (Complex Double)
-  -> HarmoicArray
+  -> HarmonicArray
   -> R.Array U DIM2 (Complex Double)
-recoverFilter' freqs (ConjugateHarmoicArray harmonics) =
+recoverFilter' freqs (ConjugateHarmonicArray harmonics) =
   R.sumS $
   traverse2
     harmonics
@@ -91,9 +91,9 @@ recoverFilter' freqs (ConjugateHarmoicArray harmonics) =
 {-# INLINE recoverFilterP' #-}
 recoverFilterP' ::
      R.Array U DIM1 (Complex Double)
-  -> HarmoicArray
+  -> HarmonicArray
   -> IO (R.Array U DIM2 (Complex Double))
-recoverFilterP' freqs (ConjugateHarmoicArray harmonics) =
+recoverFilterP' freqs (ConjugateHarmonicArray harmonics) =
   R.sumP $
   traverse2
     harmonics
@@ -125,9 +125,9 @@ makeFilter arr =
 projectImage ::
      DFTPlan
   -> R.Array U DIM2 (Complex Double)
-  -> HarmoicArray
+  -> HarmonicArray
   -> IO (R.Array U DIM3 (Complex Double))
-projectImage plan img (HarmoicArray harmonics) = do
+projectImage plan img (HarmonicArray harmonics) = do
   let (Z :. rows :. cols :. freqs) = extent harmonics
       planID2D = DFTPlanID DFT1DG ([rows, cols]) [0, 1]
       planID = DFTPlanID DFT1DG ([rows, cols, freqs]) [0, 1]
@@ -151,9 +151,9 @@ projectImage plan img (HarmoicArray harmonics) = do
 recover ::
      DFTPlan
   -> R.Array U DIM3 (Complex Double)
-  -> HarmoicArray
+  -> HarmonicArray
   -> IO (R.Array U DIM2 (Complex Double))
-recover plan input (ConjugateHarmoicArray harmonics) = do
+recover plan input (ConjugateHarmonicArray harmonics) = do
   let (Z :. rows :. cols :. freqs) = extent harmonics
       planID = DFTPlanID DFT1DG ([rows, cols, freqs]) [0, 1]
       inversePlanID = DFTPlanID IDFT1DG ([rows, cols, freqs]) [0, 1]
@@ -171,8 +171,8 @@ convolve ::
      DFTPlan
   -> R.Array U DIM2 (Complex Double)
   -> R.Array U DIM2 (Complex Double)
-  -> HarmoicArray
-  -> HarmoicArray
+  -> HarmonicArray
+  -> HarmonicArray
   -> IO (R.Array U DIM2 (Complex Double))
 convolve plan filter input harmonics conjugateHarmonics = do
   filterF <- projectFilterP filter harmonics
@@ -217,3 +217,84 @@ generateDFTPlan plan arr = do
       [0, 1]
       (VS.zipWith mkPolar vecTemp4 vecTemp5)
   return plan3
+  
+{-# INLINE projectOntoBasis #-}
+projectOntoBasis ::
+     R.Array U DIM2 (Complex Double)
+  -> HarmonicArray
+  -> HarmonicArray
+  -> R.Array U DIM3 (Complex Double)
+projectOntoBasis input (HarmonicArray harmonics) (ConjugateHarmonicArray conjugateHarmonics) =
+  computeS $
+  traverse2
+    harmonics 
+    (sumS . sumS . rotateRepa $
+     traverse2
+       conjugateHarmonics
+       input
+       const
+       (\f3d f2d idx@(Z :. i :. j :. k) -> f2d (Z :. i :. j) * f3d idx))
+    const
+    (\f3d f1d idx@(Z :. i :. j :. k) -> f3d idx * f1d (Z :. k))
+
+{-# INLINE convolveGabor #-}
+convolveGabor ::
+     DFTPlan
+  -> R.Array U DIM2 (Complex Double)
+  -> R.Array U DIM3 (Complex Double)
+  -> IO (R.Array U DIM3 (Complex Double))
+convolveGabor plan img basis = do
+  let (Z :. rows :. cols :. freqs) = extent basis
+      planID2D = DFTPlanID DFT1DG ([rows, cols]) [0, 1]
+      planID = DFTPlanID DFT1DG ([rows, cols, freqs]) [0, 1]
+      inversePlanID = DFTPlanID IDFT1DG ([rows, cols, freqs]) [0, 1]
+      imgVec = VU.convert . toUnboxed $ img
+      harmonicsVec = VU.convert . toUnboxed . computeS . makeFilter $ basis
+  imgVecF <- dftExecute plan planID2D imgVec
+  harmonicsVecF <- dftExecute plan planID harmonicsVec
+  convolvedVecF <-
+    computeP .
+    R.traverse2
+      (fromUnboxed (extent basis) . VS.convert $ harmonicsVecF)
+      (fromUnboxed (extent img) . VS.convert $ imgVecF)
+      const $
+    (\f3d f2d idx@(Z :. i :. j :. k) -> f2d (Z :. i :. j) * f3d idx)
+  convolvedVec <-
+    dftExecute plan inversePlanID . VU.convert . toUnboxed $ convolvedVecF
+  return . fromUnboxed (extent basis) . VS.convert $ convolvedVec 
+
+{-# INLINE convolve' #-}
+convolve' ::
+     DFTPlan
+  -> R.Array U DIM2 (Complex Double)
+  -> R.Array U DIM3 (Complex Double)
+  -> HarmonicArray
+  -> HarmonicArray
+  -> IO (R.Array U DIM2 (Complex Double))
+convolve' plan filter imgF harmonics conjugateHarmonics = do
+  filterF <- projectFilterP filter harmonics
+  convolvedF <-
+    computeP $
+    traverse2
+      imgF
+      filterF
+      const
+      (\f3d f1d idx@(Z :. i :. j :. k) -> (conjugate $ f1d (Z :. k)) * (f3d idx))
+  convolved <- recover plan convolvedF conjugateHarmonics
+  return convolved
+  
+
+-- {-# INLINE convolve'' #-}
+-- convolve'' ::
+--      DFTPlan
+--   -> R.Array U DIM2 (Complex Double)
+--   -> R.Array U DIM3 (Complex Double)
+--   -> HarmonicArray
+--   -> HarmonicArray
+--   -> IO (R.Array U DIM2 (Complex Double))
+-- convolve'' plan filter imgF harmonics conjugateHarmonics = do
+--   filterF <- projectFilterP filter harmonics
+ 
+--   convolved <- recover plan convolvedF conjugateHarmonics
+--   return convolved
+

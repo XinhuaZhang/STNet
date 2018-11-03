@@ -12,13 +12,13 @@ data HarmonicFlag
   | ConjugateHarmonic
   deriving (Read, Show)
 
-data HarmoicArray 
-  = HarmoicArray (Array U DIM3 (Complex Double))
-  | ConjugateHarmoicArray (Array U DIM3 (Complex Double))
+data HarmonicArray 
+  = HarmonicArray (Array U DIM3 (Complex Double))
+  | ConjugateHarmonicArray (Array U DIM3 (Complex Double))
 
-instance Show HarmoicArray where
-  show (HarmoicArray arr)          = "HarmoicArray " L.++ (showShape . extent $ arr)
-  show (ConjugateHarmoicArray arr) = "ConjugateHarmoicArray" L.++ (showShape . extent $ arr)
+instance Show HarmonicArray where
+  show (HarmonicArray arr)          = "HarmonicArray " L.++ (showShape . extent $ arr)
+  show (ConjugateHarmonicArray arr) = "ConjugateHarmonicArray" L.++ (showShape . extent $ arr)
 
 
 {-# INLINE generateR2S1HarmonicArray #-}
@@ -30,7 +30,7 @@ generateR2S1HarmonicArray ::
   -> [Double]
   -> Double
   -> HarmonicFlag
-  -> HarmoicArray
+  -> HarmonicArray
 generateR2S1HarmonicArray rows cols angularFreq radialFreq alpha inverseFlag =
   let centerR = div rows 2
       centerC = div cols 2
@@ -64,8 +64,8 @@ generateR2S1HarmonicArray rows cols angularFreq radialFreq alpha inverseFlag =
                            (log . fromIntegral $ div rows 2)))) *
                         exp (0 :+ (sign * af * theta)))
    in case inverseFlag of
-        Harmonic -> HarmoicArray $ arr
-        ConjugateHarmonic -> ConjugateHarmoicArray $ arr
+        Harmonic -> HarmonicArray $ arr
+        ConjugateHarmonic -> ConjugateHarmonicArray $ arr
 
 
 {-# INLINE impulsiveCoefficients  #-}
@@ -75,3 +75,19 @@ impulsiveCoefficients r theta maxR angularFreqs radialFreqs =
   L.map
     (\(af, rf) -> exp $ 0 :+ ((-1) * ((2 * pi / (log maxR)) * r * rf + theta * af)))
     [(af, rf) | af <- angularFreqs, rf <- radialFreqs]
+
+{-# INLINE gabor #-}
+gabor ::
+     Int -> Int -> Double -> Double -> Double -> R.Array U DIM2 (Complex Double)
+gabor rows cols freq theta sigma =
+  let centerR = div rows 2
+      centerC = div cols 2
+   in computeS . fromFunction (Z :. rows :. cols) $ \(Z :. i' :. j') ->
+        let i = i' - centerR
+            j = j' - centerC
+         in ((exp ((-1) * (fromIntegral $ (i) ^ 2 + j ^ 2) / 2 / sigma / sigma)) :+
+             0) *
+            (exp $
+             0 :+
+             (2 * pi * freq *
+              (fromIntegral i * cos theta + fromIntegral j * sin theta)))
