@@ -1,5 +1,6 @@
 import           App.STWeightSharing.Convolution
 import           Control.Monad                   as M
+import           Control.Monad.Parallel          as MP
 import           Control.Parallel.Strategies
 import           Data.Array                      as Arr
 import           Data.Array.Repa                 as R
@@ -16,6 +17,31 @@ import           System.Environment
 import           System.FilePath
 import           System.Random
 
+data STPoint
+  = Source (Double, Int, Int)
+  | Sink (Double, Int, Int)
+  deriving (Read,Show)
+
+instance Eq STPoint where
+  (==) (Source _) (Source _) = True
+  (==) (Sink _) (Sink _)     = True
+  (==) (Source _) (Sink _)   = False
+  (==) (Sink _) (Source _)   = False
+
+instance Ord STPoint where
+  compare (Source x) (Source y) = compare x y
+  compare (Sink x) (Sink y)     = compare x y
+  compare (Source _) (Sink _)   = LT
+  compare (Sink _) (Source _)   = GT
+
+{-# INLINE combineArgs #-}
+
+combineArgs :: [String] -> [String]
+combineArgs (x:y:[]) = [x L.++ " " L.++ y]
+combineArgs (x:y:xs) = (x L.++ " " L.++ y) : combineArgs xs
+
+
+
 main = do
   args <- getArgs
   print args
@@ -23,6 +49,19 @@ main = do
         L.map (\x -> read x :: Int) . L.take 6 $ args
       (sigma:angularFreq':radialFreq:alpha:theta:_) =
         L.map (\x -> read x :: Double) . L.drop 6 $ args
+      -- Generate initial distribution: arrRepa
+      (xs:ys:[]) =
+        L.group .
+        L.sort . L.map (\x -> read x :: STPoint) . combineArgs . L.drop 11 $
+        args
+      arrSourceRepa =
+        initialDist size [-angularFreq .. angularFreq] .
+        L.map (\(Source (t, x, y)) -> (t / 360 * 2 * pi, x, y)) $
+        xs
+      arrSinkRepa =
+        initialDist size [-angularFreq .. angularFreq] .
+        L.map (\(Sink (t, x, y)) -> (t / 360 * 2 * pi, x, y)) $
+        ys
       init = (0, 0, 0, 1)
       angularFreq = round angularFreq'
       freqs =
@@ -31,13 +70,33 @@ main = do
           [-angularFreq .. angularFreq]
   arrs <-
     M.mapM
-      (\f ->
-         solveMonteCarloR2S1' threads trails size orientations f sigma len init)
+      (\f -> solveMonteCarloR2S1' threads trails size orientations f sigma len init)
       [-angularFreq .. angularFreq]
   let arr =
         R.sumS . L.foldl1' (R.zipWith (+)) $
         L.zipWith (\x y -> R.map (* x) y) freqs arrs
-  plotImageRepa "test.png" .
-    Image 8 .
-    computeS . R.extend (Z :. (1 :: Int) :. All :. All) . R.map magnitude $
+  plotImageRepa "rotation.png" .
+    Image 8 . computeS . R.extend (Z :. (1 :: Int) :. All :. All) . R.map magnitude $
     arr
+  plan <- generateDFTPlan getEmptyPlan . L.head $ arrs
+  -- Source
+  sourceArrs <-
+    L.foldl1' (R.zipWith (+)) . L.map delay <$>
+    (MP.sequence $ L.zipWith (\x y -> crosscorrelation plan x y) arrSourceRepa arrs)
+  plotImageRepa "Source.png" .
+    Image 8 .
+    computeS . R.extend (Z :. (1 :: Int) :. All :. All) . R.map magnitude . R.sumS $
+    sourceArrs
+  -- Sink
+  sinkArrs <-
+    timeReversal . L.foldl1' (R.zipWith (+)) . L.map delay <$>
+    (MP.sequence $ L.zipWith (\x y -> crosscorrelation plan x y) arrSinkRepa arrs)
+  plotImageRepa "Sink.png" .
+    Image 8 .
+    computeS . R.extend (Z :. (1 :: Int) :. All :. All) . R.map magnitude . R.sumS $
+    sinkArrs
+  -- Completion Field
+  plotImageRepa "Completion.png" .
+    Image 8 .
+    computeS . R.extend (Z :. (1 :: Int) :. All :. All) . R.map magnitude . R.sumS $
+    R.zipWith (*) sourceArrs sinkArrs
