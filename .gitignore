@@ -25,3 +25,5 @@ App/FokkerPlanckMonteCarlo/plotGreens
 /App/FokkerPlanckMonteCarlo/plotGreensR2S1Harmonics
 App/FokkerPlanckMonteCarlo/GreensR2S1Harmonics/
 /App/STWeightSharing/test
+/cabal.project
+/App/PinwheelBasis/localizationTest
