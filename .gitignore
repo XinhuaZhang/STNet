@@ -21,3 +21,7 @@ GreensData
 /App/STHarmonics/greenGenerator
 /App/STHarmonics/greenGeneratorR2S1RP
 /App/PinwheelBasis/pinwheelShiftTwistWeightSharing
+App/FokkerPlanckMonteCarlo/plotGreens
+/App/FokkerPlanckMonteCarlo/plotGreensR2S1Harmonics
+App/FokkerPlanckMonteCarlo/GreensR2S1Harmonics/
+/App/STWeightSharing/test

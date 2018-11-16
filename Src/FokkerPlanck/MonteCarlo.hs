@@ -1,20 +1,22 @@
 module Src.FokkerPlanck.MonteCarlo
   ( module Src.FokkerPlanck.Types
   , solveMonteCarloR2S1
+  , solveMonteCarloR2S1'
   , solveMonteCarloR2S1RP
   ) where
 
 import           Control.Arrow
-import           Control.Monad                  as M
-import           Control.Monad.Parallel         as MP
-import           Data.Array                     as Arr
-import           Data.Array.Repa                as R
-import           Data.List                      as L
+import           Control.Monad          as M
+import           Control.Monad.Parallel as MP
+import           Data.Array             as Arr
+import           Data.Array.Repa        as R
+import           Data.Complex
+import           Data.List              as L
 import           Data.Random.Normal
-import           Data.Vector                    as V
-import           Data.Vector.Unboxed            as VU
-import           Src.Utils.Coordinates
+import           Data.Vector            as V
+import           Data.Vector.Unboxed    as VU
 import           Src.FokkerPlanck.Types
+import           Src.Utils.Coordinates
 import           Src.Utils.Parallel
 import           System.Random
 
@@ -38,7 +40,7 @@ thetaCheck theta =
     else if theta >= 2 * pi
            then theta - 2 * pi
            else theta
-           
+
 {-# INLINE scalePlus #-}
 
 scalePlus :: Double -> Double -> Double -> Double
@@ -155,7 +157,7 @@ solveMonteCarloR2S1 numGen numTrails numPoints numOrientations thetaSigma numSte
     fromUnboxed (Z :. numPoints :. numPoints :. numOrientations) .
     VU.map (\x -> fromIntegral x / totalNum) $
     totalNumVec
-    
+
 
 
 {-# INLINE countR2S1RP #-}
@@ -240,4 +242,117 @@ solveMonteCarloR2S1RP numGen numTrails numPoints numOrientations numScales theta
   return .
     fromUnboxed (Z :. numPoints :. numPoints :. numOrientations :. numScales) .
     VU.map (\x -> fromIntegral x / totalNum) $
+    totalNumVec
+
+
+{-# INLINE generatePathList' #-}
+
+generatePathList'
+  :: (RandomGen g)
+  => Int
+  -> Double
+  -> Double
+  -> Double
+  -> Int
+  -> [ParticleIndex]
+  -> g
+  -> [VU.Vector ParticleIndex]
+generatePathList' 0 _ _ _ _ _ _ = []
+generatePathList' m thetaSigma scaleSigma maxScale numSteps (init:inits) randomGen =
+  let (newGen, x) =
+        generatePath randomGen thetaSigma scaleSigma maxScale numSteps init
+      xs =
+        generatePathList'
+          (m - 1)
+          thetaSigma
+          scaleSigma
+          maxScale
+          numSteps
+          inits
+          newGen
+   in x : xs
+
+{-# INLINE countR2S1' #-}
+
+countR2S1' ::
+     Int
+  -> Int
+  -> Int
+  -> [Double]
+  -> [VU.Vector ParticleIndex]
+  -> (Int, VU.Vector (Complex Double))
+countR2S1' len numOrientations freq ts xs =
+  let maxIdx = len - 1
+      shift = maxIdx - (div len 2)
+      deltaTheta = 2 * pi / (fromIntegral numOrientations)
+      ys =
+        L.map
+          (VU.filter
+             (\(x, y, theta) ->
+                if (x <= maxIdx) && (y <= maxIdx) && (x >= 0) && (y >= 0)
+                  then True
+                  else False) .
+           VU.map
+             (\(x, y, theta, _) ->
+                ( (round x :: Int) + shift
+                , (round y :: Int) + shift
+                , (floor $ theta / deltaTheta :: Int))))
+          xs
+      numTrajectories = L.sum . L.map VU.length $ ys
+      arr =
+        accumArray (+) 0 ((0, 0, 0), (maxIdx, maxIdx, numOrientations - 1)) .
+        L.concat $
+        L.zipWith
+          (\vec t ->
+             L.map
+               (\idx -> (idx, exp (0 :+ ( (fromIntegral freq) * t)))) .
+             VU.toList $
+             vec)
+          ys
+          ts
+   in (numTrajectories, VU.fromList . elems $ arr)
+
+-- total number of trails = numGen * numTrails
+
+solveMonteCarloR2S1' ::
+     Int
+  -> Int
+  -> Int
+  -> Int
+  -> Int
+  -> Double
+  -> Int
+  -> ParticleIndex
+  -> IO (R.Array U DIM3 (Complex Double))
+solveMonteCarloR2S1' numGen numTrails numPoints numOrientations freq thetaSigma numSteps (i, j, o, s) = do
+  gens <- M.replicateM numGen newStdGen
+  oris <-
+    (L.map (L.map (* (2 * pi)))) <$>
+    M.replicateM numGen (M.replicateM (div numTrails numGen) randomIO) :: IO [[Double]]
+  let xs =
+        withStrategy (parList rdeepseq) $
+        L.zipWith
+          (\gen ori ->
+             let idx = L.map (\t -> (i, j, t, 1)) ori
+             in generatePathList'
+                  (div numTrails numGen)
+                  thetaSigma
+                  0
+                  10
+                  numSteps
+                  idx
+                  gen)
+          gens
+          oris
+      (ys, zs) =
+        L.unzip . withStrategy (parList rdeepseq) $
+        L.zipWith
+          (\x ts -> countR2S1' numPoints numOrientations freq ts x)
+          xs
+          oris
+      totalNum = fromIntegral $ L.sum ys
+      totalNumVec = L.foldl1' (VU.zipWith (+)) zs
+  return .
+    fromUnboxed (Z :. numPoints :. numPoints :. numOrientations) .
+    VU.map (/ totalNum) $
     totalNumVec
