@@ -21,8 +21,9 @@ norm vec =
         vec
 
 main = do
-  (numPointStr:numOrientationStr:freq1Str:freq2Str:numScaleStr:thetaSigmaStr:scaleSigmaStr:maxScaleStr:lenStr:initStr:numTrailStr:numThreadStr:_) <-
+  args@(numPointStr:numOrientationStr:freq1Str:freq2Str:numScaleStr:thetaSigmaStr:scaleSigmaStr:maxScaleStr:lenStr:initStr:numTrailStr:numThreadStr:_) <-
     getArgs
+  print args
   let numPoint = read numPointStr :: Int
       numOrientation = read numOrientationStr :: Int
       freq1 = read freq1Str :: Int

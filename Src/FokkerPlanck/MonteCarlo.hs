@@ -4,6 +4,7 @@ module Src.FokkerPlanck.MonteCarlo
   , solveMonteCarloR2S1'
   , solveMonteCarloR2S1''
   , solveMonteCarloR2S1RP
+  , solveMonteCarloR2S1RP''
   ) where
 
 import           Control.Arrow
@@ -25,8 +26,8 @@ import           System.Random
 
 thetaPlus :: Double -> Double -> Double
 thetaPlus x y
-  | z < 0 = z + a
-  | z >= a = z - a
+  | z < 0 = thetaCheck $ z + a
+  | z >= a = thetaCheck $ z - a
   | otherwise = z
   where
     z = x + y
@@ -44,11 +45,11 @@ thetaCheck theta =
 
 {-# INLINE scalePlus #-}
 
-scalePlus :: Double -> Double -> Double -> Double
+scalePlus :: Double -> Double -> Double -> (Double, Bool)
 scalePlus maxScale x y
-  | z <= 0 = 0
-  | z >= maxScale = maxScale
-  | otherwise = z
+  | z < 0 = (-z, True)
+  | z >= maxScale = (maxScale, False)
+  | otherwise = (z, False)
   where
     z = x + y
 
@@ -67,13 +68,16 @@ generatePath randomGen thetaSigma scaleSigma maxScale numSteps init =
             if scaleSigma == 0
               then (0, newGen1)
               else normal' (0, scaleSigma) newGen1
+          (newScale, flag) = scalePlus maxScale scale deltaScale
           newIndex =
             ( (x + scale * cos theta)
             , (y + scale * sin theta)
-            , (theta `thetaPlus` deltaTheta)
-            , (scalePlus maxScale scale deltaScale))
+            , (if flag
+                 then (theta `thetaPlus` (deltaTheta + pi))
+                 else (theta `thetaPlus` deltaTheta))
+            , newScale)
           (gen, xs) = go newGen2 (n - 1) newIndex
-      in (gen, newIndex : xs)
+       in (gen, newIndex : xs)
 
 {-# INLINE generatePathList #-}
 
@@ -441,5 +445,132 @@ solveMonteCarloR2S1'' numGen numTrails numPoints freq1 freq thetaSigma numSteps 
       totalNumVec = L.foldl1' (VU.zipWith (+)) zs
   return .
     fromUnboxed (Z :. numPoints :. numPoints :. (2 * freq1 + 1)) .
+    VU.map (/ totalNum) $
+    totalNumVec
+
+
+
+{-# INLINE countR2S1RP'' #-}
+
+countR2S1RP'' ::
+     Int
+  -> [Int]
+  -> Int
+  -> [Int]
+  -> Int
+  -> Double
+  -> [Double]
+  -> [Double]
+  -> [VU.Vector ParticleIndex]
+  -> (Int, VU.Vector (Complex Double))
+countR2S1RP'' len angularFreqs angularFreq1 radialFreqs radialFreq1 maxScale ts ss xs =
+  let maxIdx = len - 1
+      shift = maxIdx - (div len 2)
+      ys =
+        L.map
+          (VU.toList .
+           VU.filter
+             (\((x, y), (_, s)) ->
+                if (x <= maxIdx) &&
+                   (y <= maxIdx) && (x >= 0) && (y >= 0) && (s > 0)
+                  then True
+                  else False) .
+           VU.map
+             (\(x, y, theta, scale) ->
+                ( ((round x :: Int) + shift, (round y :: Int) + shift)
+                , (theta, scale)))) $
+        xs
+      numTrajectories = L.sum . L.map L.length $ ys
+      arr =
+        accumArray
+          (+)
+          0
+          ( (0, 0, L.head angularFreqs, L.head radialFreqs)
+          , (maxIdx, maxIdx, L.last angularFreqs, L.last radialFreqs)) .
+        L.concatMap
+          (\(m, n) ->
+             L.concat $
+             L.zipWith3
+               (\x t s ->
+                  L.map
+                    (\((a, b), (t1, s1)) ->
+                       ( (a, b, m, n)
+                       , (exp $ 0 :+ (fromIntegral angularFreq1 * t)) *
+                         (exp $ 0 :+ (fromIntegral m) * t1) *
+                         -- ((s :+ 0) **
+                         --  (0 :+ fromIntegral radialFreq1 * 2 * pi / maxScale)) *
+                         -- ((s1 :+ 0) ** (0 :+ fromIntegral n * 2 * pi / maxScale))
+                         (exp $ 0 :+ fromIntegral radialFreq1 * s * 2 * pi / maxScale) *
+                         (exp $ 0 :+ fromIntegral n * s1 * 2 * pi / maxScale)
+                        ))
+                    x)
+               ys
+               ts
+               ss) $
+        [(m, n) | m <- angularFreqs, n <- radialFreqs]
+   in (numTrajectories, VU.fromList . elems $ arr)
+
+
+solveMonteCarloR2S1RP'' ::
+     Int
+  -> Int
+  -> Int
+  -> [Int]
+  -> Int
+  -> [Int]
+  -> Int
+  -> Double
+  -> Double
+  -> Double
+  -> Int
+  -> ParticleIndex
+  -> IO (R.Array U DIM4 (Complex Double))
+solveMonteCarloR2S1RP'' numGen numTrails numPoints angularFreqs angularFreq1 radialFreqs radialFreq1 thetaSigma scaleSigma maxScale numSteps (i, j, _, _) = do
+  gens <- M.replicateM numGen newStdGen
+  oris <-
+    L.map (L.map (* (2 * pi))) <$>
+    M.replicateM numGen (M.replicateM (div numTrails numGen) randomIO) :: IO [[Double]]
+  scales <-
+    L.map (L.map (* maxScale)) <$>
+    M.replicateM numGen (M.replicateM (div numTrails numGen) randomIO) :: IO [[Double]]
+  let xs =
+        withStrategy (parList rdeepseq) $
+        L.zipWith3
+          (\gen ori scale ->
+             let idx = L.zipWith (\t s -> (i, j, t, s)) ori scale
+              in generatePathList'
+                   (div numTrails numGen)
+                   thetaSigma
+                   scaleSigma
+                   maxScale
+                   numSteps
+                   idx
+                   gen)
+          gens
+          oris
+          scales
+      (ys, zs) =
+        L.unzip . withStrategy (parList rdeepseq) $
+        L.zipWith3
+          (\x ts ss ->
+             countR2S1RP''
+               numPoints
+               angularFreqs
+               angularFreq1
+               radialFreqs
+               radialFreq1
+               maxScale
+               ts
+               ss
+               x)
+          xs
+          oris
+          scales
+      totalNum = fromIntegral $ L.sum ys
+      totalNumVec = L.foldl1' (VU.zipWith (+)) zs
+  return .
+    fromUnboxed
+      (Z :. numPoints :. numPoints :. (L.length angularFreqs) :.
+       (L.length radialFreqs)) .
     VU.map (/ totalNum) $
     totalNumVec
