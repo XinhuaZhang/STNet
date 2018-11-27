@@ -21,11 +21,12 @@ norm vec =
         vec
 
 main = do
-  (numPointStr:numOrientationStr:freqStr:numScaleStr:thetaSigmaStr:scaleSigmaStr:maxScaleStr:lenStr:initStr:numTrailStr:numThreadStr:_) <-
+  (numPointStr:numOrientationStr:freq1Str:freq2Str:numScaleStr:thetaSigmaStr:scaleSigmaStr:maxScaleStr:lenStr:initStr:numTrailStr:numThreadStr:_) <-
     getArgs
   let numPoint = read numPointStr :: Int
       numOrientation = read numOrientationStr :: Int
-      freq = read freqStr :: Int
+      freq1 = read freq1Str :: Int
+      freq2 = read freq2Str :: Int
       numScale = read numScaleStr :: Int
       thetaSigma = read thetaSigmaStr :: Double
       scaleSigma = read scaleSigmaStr :: Double
@@ -35,27 +36,25 @@ main = do
       numTrail = read numTrailStr :: Int
       numThread = read numThreadStr :: Int
   arr <-
-    solveMonteCarloR2S1'
+    solveMonteCarloR2S1''
       numThread
       numTrail
       numPoint
-      numOrientation
-      freq
+      freq1
+      freq2
       thetaSigma
       len
       init
   let arr' = R.sumS arr :: R.Array U DIM2 (Complex Double)
-      folderName = "GreensR2S1Harmonics"
+      folderName = "GreensR2S1HarmonicsFull"
   createDirectoryIfMissing True folderName
-  IM.writeImage (folderName </> "GreensR2S1RPHarmonic.ppm") $
-    (IM.arrayToImage . listArray ((0, 0), (numPoint - 1, numPoint - 1)) . R.toList $
-     arr' :: IM.ComplexImage)
   M.mapM_
     (\i ->
         IM.writeImage
-          (folderName </> ((show $ i + 1) L.++ ".ppm"))
+          (folderName </> thetaSigmaStr L.++ "_" L.++ show i L.++ "_" L.++
+           ((show $ i - freq1) L.++ ".ppm"))
           (IM.arrayToImage .
            listArray ((0, 0), (numPoint - 1, numPoint - 1)) .
            R.toList . R.slice arr $
            (Z :. All :. All :. i) :: IM.ComplexImage))
-    [0 .. numOrientation - 1]
+    [0 .. 2 * freq1]
