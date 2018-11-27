@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 module App.STWeightSharing.Convolution where
 
 import           Control.Monad               as M
@@ -112,13 +113,23 @@ generateDFTPlan plan arr = do
       [rows, cols]
       [0, 1]
       (VS.zipWith mkPolar vecTemp4 vecTemp5)
-  return plan3
+  vecTemp6 <-
+    VS.fromList <$> M.replicateM (orientations * rows * cols) randomIO :: IO (VS.Vector Double)
+  vecTemp7 <-
+    VS.fromList <$> M.replicateM (orientations * rows * cols) randomIO :: IO (VS.Vector Double)
+  (plan4, vecTemp8) <-
+    dft1dGPlan
+      lock
+      plan3
+      ([rows, cols, orientations])
+      [2]
+      (VS.zipWith mkPolar vecTemp6 vecTemp7)
+  (plan5, _) <- idft1dGPlan lock plan4 ([rows, cols, orientations]) [2] vecTemp8
+  return plan5
 
 {-# INLINE timeReversal #-}
 
-timeReversal
-  :: (Unbox e)
-  => R.Array D DIM3 e -> R.Array U DIM3 e
+timeReversal :: (R.Source s e, Unbox e) => R.Array s DIM3 e -> R.Array U DIM3 e
 timeReversal arr =
   let (Z :. _ :. _ :. nf) = extent arr
       n = div nf 2
@@ -131,3 +142,76 @@ timeReversal arr =
                 then (Z :. i :. j :. k - x)
                 else (Z :. i :. j :. k + n))
        arr
+
+{-# INLINE freqDomain2S1 #-}
+freqDomain2S1 ::
+     (R.Source s (Complex Double))
+  => Int
+  -> R.Array s DIM3 (Complex Double)
+  -> (R.Array U DIM3 (Complex Double))
+freqDomain2S1 oris arr =
+  let (Z :. rows :. cols :. n) = extent arr
+      freq = div (n - 1) 2
+      xs = L.map (\i -> R.slice arr (Z :. All :. All :. i)) [0 .. n - 1]
+      ys =
+        L.map
+          (\m ->
+             fromFunction (Z :. rows :. cols :. oris) $ \(Z :. _ :. _ :. i) ->
+               let theta = fromIntegral i * 2 * pi / (fromIntegral oris)
+                in exp $ 0 :+ (-1) * fromIntegral m * theta)
+          [-freq .. freq]
+   in computeS . L.foldl1' (R.zipWith (+)) $ 
+      L.zipWith
+        (\x y ->
+           traverse2
+             y
+             x
+             const
+             (\f3d f2d idx@(Z :. i :. j :. k) -> f3d idx * f2d (Z :. i :. j)))
+        xs
+        ys
+
+
+{-# INLINE makeFilter1D #-}
+makeFilter1D :: (R.Source s e) => R.Array s DIM3 e -> R.Array D DIM3 e
+makeFilter1D arr =
+  let (Z :. _ :. _ :. n) = extent arr
+   in R.backpermute
+        (extent arr)
+        (\(Z :. i :. j :. k) ->
+           let half = div n 2
+               z =
+                 if k < half
+                   then k + half
+                   else k - half
+            in (Z :. i :. j :. z))
+        arr
+
+{-# INLINE timeReversal1D #-}
+timeReversal1D ::
+     (R.Source s (Complex Double))
+  => R.Array s DIM3 (Complex Double)
+  -> R.Array U DIM3 (Complex Double)
+timeReversal1D arr =
+  let (Z :. _ :. _ :. n) = extent arr
+      freq = div (n - 1) 2
+   in computeS . R.traverse arr id $ \f idx@(Z :. _ :. _ :. k) ->
+        let m = fromIntegral $ k - freq
+         in f idx * (exp (0 :+ m * pi))
+
+completion ::
+     (R.Source s1 (Complex Double), R.Source s2 (Complex Double))
+  => DFTPlan
+  -> R.Array s1 DIM3 (Complex Double)
+  -> R.Array s2 DIM3 (Complex Double)
+  -> IO (R.Array U DIM3 (Complex Double))
+completion plan arr1 arr2 = do
+  let (Z :. rows :. cols :. oris) = extent arr1
+      planID = DFTPlanID DFT1DG [rows, cols, oris] [2]
+      inversePlanID = DFTPlanID IDFT1DG [rows, cols, oris] [2]
+      vec1 = VU.convert . toUnboxed . computeS . delay $ arr1
+      vec2 = VU.convert . toUnboxed . computeS . makeFilter1D $ arr2
+  vec1F <- dftExecute plan planID vec1
+  vec2F <- dftExecute plan planID vec2
+  convolvedVec <- dftExecute plan inversePlanID $ VS.zipWith (*) vec1F vec2F
+  return . fromUnboxed (extent arr1) . VS.convert $ convolvedVec

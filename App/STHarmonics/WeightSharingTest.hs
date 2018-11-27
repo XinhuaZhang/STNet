@@ -126,14 +126,14 @@ main = do
       (VS.zipWith mkPolar vecTemp2D1 vecTemp2D2)
   -- Generate Green's function
   arrG <-
-    solveMonteCarlo
+    solveMonteCarloR2S1
       threads
       trails
       size
       orientations
       sigma
       len
-      (0, 0, 0 / 360 * pi)
+      (0, 0, 0 / 360 * pi, 0)
   let arrG'
         -- computeS .
         -- makeFilter .
@@ -153,8 +153,9 @@ main = do
     reduceContrast contrastN . L.foldl1' (VU.zipWith (+)) . get25DArray2DVector $
     outputSource
   -- Sink field
-  outputSink <-
-    timeReversal <$>
+  outputSink
+    -- timeReversal <$>
+     <-
     (shareWeightST dftPlan CrossCorrelationST (0, 1) arrSinkRepa .
      computeS . rotate3D $
      arrG)
@@ -170,4 +171,11 @@ main = do
     fromUnboxed (Z :. (1 :: Int) :. size :. size) .
     -- reduceContrast contrastN .
     L.foldl1' (VU.zipWith (+)) . get25DArray2DVector $
-    R.zipWith (*) outputSource outputSink
+    R.zipWith (*) outputSource (timeReversal outputSink)
+  plotImageRepa "completionField1.png" .
+    Image 8 .
+    fromUnboxed (Z :. (1 :: Int) :. size :. size) $
+    VU.zipWith
+      (*)
+      (L.foldl1' (VU.zipWith (+)) . get25DArray2DVector $ outputSource)
+      (L.foldl1' (VU.zipWith (+)) . get25DArray2DVector $ outputSink)

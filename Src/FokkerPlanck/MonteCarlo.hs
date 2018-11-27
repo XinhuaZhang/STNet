@@ -2,6 +2,7 @@ module Src.FokkerPlanck.MonteCarlo
   ( module Src.FokkerPlanck.Types
   , solveMonteCarloR2S1
   , solveMonteCarloR2S1'
+  , solveMonteCarloR2S1''
   , solveMonteCarloR2S1RP
   ) where
 
@@ -354,5 +355,91 @@ solveMonteCarloR2S1' numGen numTrails numPoints numOrientations freq thetaSigma 
       totalNumVec = L.foldl1' (VU.zipWith (+)) zs
   return .
     fromUnboxed (Z :. numPoints :. numPoints :. numOrientations) .
+    VU.map (/ totalNum) $
+    totalNumVec
+
+
+
+{-# INLINE countR2S1'' #-}
+
+countR2S1'' ::
+     Int
+  -> Int
+  -> Int
+  -> [Double]
+  -> [VU.Vector ParticleIndex]
+  -> (Int, VU.Vector (Complex Double))
+countR2S1'' len freq1 freq ts xs =
+  let maxIdx = len - 1
+      shift = maxIdx - (div len 2)
+      ys =
+        L.map
+          (VU.toList .
+           VU.filter
+             (\((x, y), _) ->
+                if (x <= maxIdx) && (y <= maxIdx) && (x >= 0) && (y >= 0)
+                  then True
+                  else False) .
+           VU.map
+             (\(x, y, theta, _) ->
+                (((round x :: Int) + shift, (round y :: Int) + shift), theta))) $
+        xs
+      numTrajectories = L.sum . L.map L.length $ ys
+      arr =
+        accumArray (+) 0 ((0, 0, -freq1), (maxIdx, maxIdx, freq1)) .
+        L.concatMap
+          (\n ->
+             L.concat $
+             L.zipWith
+               (\x t ->
+                  L.map
+                    (\((a, b), t1) ->
+                       ( (a, b, n)
+                       , (exp (0 :+ ((fromIntegral freq) * t)) *
+                          (exp $ 0 :+ (fromIntegral n) * t1))))
+                    x)
+               ys
+               ts) $
+        [-freq1 .. freq1]
+   in (numTrajectories, VU.fromList . elems $ arr)
+
+
+solveMonteCarloR2S1'' ::
+     Int
+  -> Int
+  -> Int
+  -> Int
+  -> Int
+  -> Double
+  -> Int
+  -> ParticleIndex
+  -> IO (R.Array U DIM3 (Complex Double))
+solveMonteCarloR2S1'' numGen numTrails numPoints freq1 freq thetaSigma numSteps (i, j, o, s) = do
+  gens <- M.replicateM numGen newStdGen
+  oris <-
+    (L.map (L.map (* (2 * pi)))) <$>
+    M.replicateM numGen (M.replicateM (div numTrails numGen) randomIO) :: IO [[Double]]
+  let xs =
+        withStrategy (parList rdeepseq) $
+        L.zipWith
+          (\gen ori ->
+             let idx = L.map (\t -> (i, j, t, 1)) ori
+              in generatePathList'
+                   (div numTrails numGen)
+                   thetaSigma
+                   0
+                   10
+                   numSteps
+                   idx
+                   gen)
+          gens
+          oris
+      (ys, zs) =
+        L.unzip . withStrategy (parList rdeepseq) $
+        L.zipWith (\x ts -> countR2S1'' numPoints freq1 freq ts x) xs oris
+      totalNum = fromIntegral $ L.sum ys
+      totalNumVec = L.foldl1' (VU.zipWith (+)) zs
+  return .
+    fromUnboxed (Z :. numPoints :. numPoints :. (2 * freq1 + 1)) .
     VU.map (/ totalNum) $
     totalNumVec
