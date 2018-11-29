@@ -73,7 +73,7 @@ main = do
       (\f -> solveMonteCarloR2S1'' threads trails size 5 f sigma len init)
       [-angularFreq .. angularFreq]
   -- let arr =
-  --       freqDomain2S1 orientations . L.foldl1' (R.zipWith (+)) $
+  --       freqDomainR2S1 orientations . L.foldl1' (R.zipWith (+)) $
   --       L.zipWith (\x y -> R.map (* x) y) freqs arrs
   -- plotImageRepa "rotation.png" .
   --   Image 8 .
@@ -90,7 +90,7 @@ main = do
   --   Image 8 .
   --   computeS .
   --   R.extend (Z :. (1 :: Int) :. All :. All) .
-  --   R.map magnitude . R.sumS . freqDomain2S1 orientations $
+  --   R.map magnitude . R.sumS . freqDomainR2S1 orientations $
   --   sourceArrs
   -- Sink
   sinkArrs <-
@@ -101,13 +101,13 @@ main = do
   --   Image 8 .
   --   computeS .
   --   R.extend (Z :. (1 :: Int) :. All :. All) .
-  --   R.map magnitude . R.sumS . freqDomain2S1 orientations $
+  --   R.map magnitude . R.sumS . freqDomainR2S1 orientations $
   --   sinkArrs
   -- Completion Field
-  completionField <- completion plan sourceArrs (timeReversal1D sinkArrs)
+  completionField <- completionR2S1 plan sourceArrs (timeReversalR2S1 sinkArrs)
   plotImageRepa "Completion.png" .
     Image 8 .
     computeS .
     R.extend (Z :. (1 :: Int) :. All :. All) .
-    R.map magnitude . R.sumS . freqDomain2S1 orientations $
+    R.map magnitude . R.sumS . freqDomainR2S1 orientations $
     completionField
