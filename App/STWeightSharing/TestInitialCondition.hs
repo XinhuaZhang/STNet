@@ -47,12 +47,12 @@ main = do
   print args
   let (orientations:size:len:trails:threads:contrastN:_) =
         L.map (\x -> read x :: Int) . L.take 6 $ args
-      (sigma:angularFreq':radialFreq:alpha:theta:_) =
+      (sigma:angularFreq':radialFreq:alpha:theta:tao:_) =
         L.map (\x -> read x :: Double) . L.drop 6 $ args
       -- Generate initial distribution: arrRepa
       (xs:ys:[]) =
         L.group .
-        L.sort . L.map (\x -> read x :: STPoint) . combineArgs . L.drop 11 $
+        L.sort . L.map (\x -> read x :: STPoint) . combineArgs . L.drop 12 $
         args
       arrSourceRepa =
         initialDist size [-angularFreq .. angularFreq] .
@@ -64,39 +64,63 @@ main = do
         ys
       init = (0, 0, 0, 1)
       angularFreq = round angularFreq'
+      freqs0 = generateHarmonicCoefficients 0 [-angularFreq .. angularFreq]
       freqs =
         generateHarmonicCoefficients
           (theta / 360 * 2 * pi)
           [-angularFreq .. angularFreq]
   arrs <-
     M.mapM
-      (\f -> solveMonteCarloR2S1' threads trails size orientations f sigma len init)
+      (\f ->
+         solveMonteCarloR2S1'
+           threads
+           trails
+           size
+           orientations
+           f
+           sigma
+           tao
+           len
+           init)
       [-angularFreq .. angularFreq]
-  let arr =
+  let arr0 =
+        R.sumS . L.foldl1' (R.zipWith (+)) $
+        L.zipWith (\x y -> R.map (* x) y) freqs0 arrs
+      arr =
         R.sumS . L.foldl1' (R.zipWith (+)) $
         L.zipWith (\x y -> R.map (* x) y) freqs arrs
-  plotImageRepa "rotation.png" .
-    Image 8 . computeS . R.extend (Z :. (1 :: Int) :. All :. All) . R.map magnitude $
+  plotImageRepa "InitialCondition_0.png" .
+    Image 8 .
+    computeS . R.extend (Z :. (1 :: Int) :. All :. All) . R.map magnitude $
+    arr0
+  plotImageRepa ("InitialCondition_" L.++ show theta L.++ ".png") .
+    Image 8 .
+    computeS . R.extend (Z :. (1 :: Int) :. All :. All) . R.map magnitude $
     arr
   plan <- generateDFTPlan getEmptyPlan . L.head $ arrs
   -- Source
   sourceArrs <-
     L.foldl1' (R.zipWith (+)) . L.map delay <$>
-    (MP.sequence $ L.zipWith (\x y -> crosscorrelation plan x y) arrSourceRepa arrs)
-  plotImageRepa "Source.png" .
+    (MP.sequence $
+     L.zipWith (\x y -> crosscorrelation plan x y) arrSourceRepa arrs)
+  plotImageRepa "InitialCondition_Source.png" .
     Image 8 .
-    computeS . R.extend (Z :. (1 :: Int) :. All :. All) . R.map magnitude . R.sumS $
+    computeS .
+    R.extend (Z :. (1 :: Int) :. All :. All) . R.map magnitude . R.sumS $
     sourceArrs
   -- Sink
   sinkArrs <-
     timeReversal . L.foldl1' (R.zipWith (+)) . L.map delay <$>
-    (MP.sequence $ L.zipWith (\x y -> crosscorrelation plan x y) arrSinkRepa arrs)
-  plotImageRepa "Sink.png" .
+    (MP.sequence $
+     L.zipWith (\x y -> crosscorrelation plan x y) arrSinkRepa arrs)
+  plotImageRepa "InitialCondition_Sink.png" .
     Image 8 .
-    computeS . R.extend (Z :. (1 :: Int) :. All :. All) . R.map magnitude . R.sumS $
+    computeS .
+    R.extend (Z :. (1 :: Int) :. All :. All) . R.map magnitude . R.sumS $
     sinkArrs
   -- Completion Field
-  plotImageRepa "Completion.png" .
+  plotImageRepa "InitialCondition_Completion.png" .
     Image 8 .
-    computeS . R.extend (Z :. (1 :: Int) :. All :. All) . R.map magnitude . R.sumS $
+    computeS .
+    R.extend (Z :. (1 :: Int) :. All :. All) . R.map magnitude . R.sumS $
     R.zipWith (*) sourceArrs sinkArrs

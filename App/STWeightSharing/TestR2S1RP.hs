@@ -1,3 +1,5 @@
+{-# LANGUAGE BangPatterns #-}
+import           App.STHarmonics.Utils
 import           App.STWeightSharing.Convolution
 import           Control.Monad                   as M
 import           Control.Monad.Parallel          as MP
@@ -12,6 +14,7 @@ import           Src.FokkerPlanck.MonteCarlo
 import           Src.Image.ImageIO
 import           Src.Utils.Coordinates
 import           Src.Utils.DFT
+import           Src.Utils.Time
 import           System.Directory
 import           System.Environment
 import           System.FilePath
@@ -47,12 +50,12 @@ main = do
   print args
   let (orientations:scales:size:len:trails:threads:contrastN:angularFreq:radialFreq:_) =
         L.map (\x -> read x :: Int) . L.take 9 $ args
-      (thetaSigma:scaleSigma:theta:scale:maxScale:_) =
+      (thetaSigma:scaleSigma:theta:scale:maxScale:tao:_) =
         L.map (\x -> read x :: Double) . L.drop 9 $ args
       -- Generate initial distribution: arrRepa
       (xs:ys:[]) =
         L.group .
-        L.sort . L.map (\x -> read x :: STPoint) . combineArgs . L.drop 14 $
+        L.sort . L.map (\x -> read x :: STPoint) . combineArgs . L.drop 15 $
         args
       arrSourceRepa =
         initialDistR2S1RP
@@ -79,20 +82,28 @@ main = do
           [-radialFreq .. radialFreq]
           maxScale
       freqs1 = [-5 .. 5]
-  arrs <-
-    solveMonteCarloR2S1RP''
-      threads
-      trails
-      size
-      freqs1
-      [-angularFreq .. angularFreq]
-      freqs1
-      [-radialFreq .. radialFreq]
-      thetaSigma
-      scaleSigma
-      maxScale
-      len
-      init
+  -- printCurrentTime
+  -- !arrs <-
+  --   solveMonteCarloR2S1RP''
+  --     threads
+  --     trails
+  --     size
+  --     freqs1
+  --     [-angularFreq .. angularFreq]
+  --     freqs1
+  --     [-radialFreq .. radialFreq]
+  --     thetaSigma
+  --     scaleSigma
+  --     maxScale
+  --     tao
+  --     len
+  --     init  
+  -- writeRepaArrays "greenR2S1RP.dat" arrs
+  -- printCurrentTime
+  printCurrentTime
+  arrs <- readRepaArrays "greenR2S1RP.dat"
+  printCurrentTime
+  print . extent . L.head $ arrs
   let arr =
         freqDomainR2S1RP orientations scales maxScale .
         fromUnboxed (extent . L.head $ arrs) . L.foldl1' (VU.zipWith (+)) $
@@ -102,6 +113,7 @@ main = do
     computeS .
     R.extend (Z :. (1 :: Int) :. All :. All) . R.map magnitude . R.sumS . R.sumS $
     arr
+  printCurrentTime
   plan <- generateDFTPlanR2S1RP getEmptyPlan . L.head $ arrs
   -- Source
   sourceArrs <-

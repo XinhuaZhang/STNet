@@ -77,11 +77,12 @@ crosscorrelation plan img harmonics = do
   let convolvedVecF =
         computeS .
         R.traverse2
-          (fromUnboxed (extent harmonics) . VS.convert . VS.map conjugate $ harmonicsVecF)
+          (fromUnboxed (extent harmonics) . VS.convert $ harmonicsVecF)
           (fromUnboxed (extent img) . VS.convert $ imgVecF)
           const $
         (\f3d f2d idx@(Z :. i :. j :. k) -> f2d (Z :. i :. j) * f3d idx)
-  convolvedVec <- dftExecute plan inversePlanID . VU.convert . toUnboxed $ convolvedVecF
+  convolvedVec <-
+    dftExecute plan inversePlanID . VU.convert . toUnboxed $ convolvedVecF
   return . fromUnboxed (extent harmonics) . VS.convert $ convolvedVec
 
 

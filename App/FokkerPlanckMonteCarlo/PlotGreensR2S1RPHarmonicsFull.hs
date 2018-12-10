@@ -22,7 +22,7 @@ norm vec =
         vec
 
 main = do
-  args@(numPointStr:numOrientationStr:angularFreqStr:angularFreq1Str:radialFreqStr:radialFreq1Str:numScaleStr:thetaSigmaStr:scaleSigmaStr:maxScaleStr:lenStr:initStr:numTrailStr:numThreadStr:_) <-
+  args@(numPointStr:numOrientationStr:angularFreqStr:angularFreq1Str:radialFreqStr:radialFreq1Str:numScaleStr:thetaSigmaStr:scaleSigmaStr:maxScaleStr:taoStr:lenStr:initStr:numTrailStr:numThreadStr:_) <-
     getArgs
   print args
   let numPoint = read numPointStr :: Int
@@ -35,6 +35,7 @@ main = do
       thetaSigma = read thetaSigmaStr :: Double
       scaleSigma = read scaleSigmaStr :: Double
       maxScale = read maxScaleStr :: Double
+      tao = read taoStr :: Double
       len = read lenStr :: Int
       init = read initStr :: (Double, Double, Double, Double)
       numTrail = read numTrailStr :: Int
@@ -47,12 +48,13 @@ main = do
       numTrail
       numPoint
       angularFreqs
-      angularFreq1
+      [-angularFreq1 .. angularFreq1]
       radialFreqs
-      radialFreq1
+      [-radialFreq1 .. radialFreq1]
       thetaSigma
       scaleSigma
       maxScale
+      tao
       len
       init
   let arr' = R.sumS . R.sumS $ arr :: R.Array U DIM2 (Complex Double)

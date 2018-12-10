@@ -32,3 +32,7 @@ App/FokkerPlanckMonteCarlo/GreensR2S1Harmonics/
 /App/STWeightSharing/test1
 /App/PinwheelBasis/gaborTest
 /App/STWeightSharing/testR2S1RP
+/App/STWeightSharing/greenR2S1RP.dat
+/App/STWeightSharing/greenR2S1RP.dat.bak
+/App/STWeightSharing/testFull
+/App/STWeightSharing/testInitialCondition

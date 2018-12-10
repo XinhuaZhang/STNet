@@ -47,7 +47,7 @@ main = do
   print args
   let (orientations:size:len:trails:threads:contrastN:_) =
         L.map (\x -> read x :: Int) . L.take 6 $ args
-      (sigma:angularFreq':radialFreq:alpha:theta:_) =
+      (sigma:angularFreq':radialFreq:theta:tao:_) =
         L.map (\x -> read x :: Double) . L.drop 6 $ args
       -- Generate initial distribution: arrRepa
       (xs:ys:[]) =
@@ -64,48 +64,57 @@ main = do
         ys
       init = (0, 0, 0, 1)
       angularFreq = round angularFreq'
+      freqs0 = generateHarmonicCoefficients 0 [-angularFreq .. angularFreq]
       freqs =
         generateHarmonicCoefficients
           (theta / 360 * 2 * pi)
           [-angularFreq .. angularFreq]
   arrs <-
     M.mapM
-      (\f -> solveMonteCarloR2S1'' threads trails size 5 f sigma len init)
+      (\f -> solveMonteCarloR2S1'' threads trails size 5 f sigma tao len init)
       [-angularFreq .. angularFreq]
-  -- let arr =
-  --       freqDomainR2S1 orientations . L.foldl1' (R.zipWith (+)) $
-  --       L.zipWith (\x y -> R.map (* x) y) freqs arrs
-  -- plotImageRepa "rotation.png" .
-  --   Image 8 .
-  --   computeS .
-  --   R.extend (Z :. (1 :: Int) :. All :. All) . R.map magnitude . R.sumS $
-  --   arr
+  let arr0 =
+        freqDomainR2S1 orientations . L.foldl1' (R.zipWith (+)) $
+        L.zipWith (\x y -> R.map (* x) y) freqs0 arrs
+      arr =
+        freqDomainR2S1 orientations . L.foldl1' (R.zipWith (+)) $
+        L.zipWith (\x y -> R.map (* x) y) freqs arrs
+  plotImageRepa "Full_0.png" .
+    Image 8 .
+    computeS .
+    R.extend (Z :. (1 :: Int) :. All :. All) . R.map magnitude . R.sumS $
+    arr0
+  plotImageRepa ("Full_" L.++ show theta L.++ ".png") .
+    Image 8 .
+    computeS .
+    R.extend (Z :. (1 :: Int) :. All :. All) . R.map magnitude . R.sumS $
+    arr
   plan <- generateDFTPlan getEmptyPlan . L.head $ arrs
   -- Source
   sourceArrs <-
     L.foldl1' (R.zipWith (+)) . L.map delay <$>
     (MP.sequence $
      L.zipWith (\x y -> crosscorrelation plan x y) arrSourceRepa arrs)
-  -- plotImageRepa "Source.png" .
-  --   Image 8 .
-  --   computeS .
-  --   R.extend (Z :. (1 :: Int) :. All :. All) .
-  --   R.map magnitude . R.sumS . freqDomainR2S1 orientations $
-  --   sourceArrs
+  plotImageRepa "Full_Source.png" .
+    Image 8 .
+    computeS .
+    R.extend (Z :. (1 :: Int) :. All :. All) .
+    R.map magnitude . R.sumS . freqDomainR2S1 orientations $
+    sourceArrs
   -- Sink
   sinkArrs <-
     L.foldl1' (R.zipWith (+)) . L.map delay <$>
     (MP.sequence $
      L.zipWith (\x y -> crosscorrelation plan x y) arrSinkRepa arrs)
-  -- plotImageRepa "Sink.png" .
-  --   Image 8 .
-  --   computeS .
-  --   R.extend (Z :. (1 :: Int) :. All :. All) .
-  --   R.map magnitude . R.sumS . freqDomainR2S1 orientations $
-  --   sinkArrs
+  plotImageRepa "Full_Sink.png" .
+    Image 8 .
+    computeS .
+    R.extend (Z :. (1 :: Int) :. All :. All) .
+    R.map magnitude . R.sumS . freqDomainR2S1 orientations $
+    sinkArrs
   -- Completion Field
   completionField <- completionR2S1 plan sourceArrs (timeReversalR2S1 sinkArrs)
-  plotImageRepa "Completion.png" .
+  plotImageRepa "Full_Completion.png" .
     Image 8 .
     computeS .
     R.extend (Z :. (1 :: Int) :. All :. All) .
